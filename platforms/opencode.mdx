@@ -1,0 +1,118 @@
+---
+title: OpenCode
+description: Install Understand Anything on OpenCode via plugin configuration.
+---
+
+## Overview
+
+OpenCode is a **supported platform** for Understand Anything. Installation is done by adding one line to your `opencode.json` config file — OpenCode then fetches and installs the plugin automatically on next startup.
+
+## Prerequisites
+
+- [OpenCode](https://opencode.ai) installed
+- A project directory with an `opencode.json`, or a global `opencode.json` in your home directory
+
+## Installation
+
+<Steps>
+  <Step title="Add the plugin to opencode.json">
+    Open your `opencode.json` (project-level or global) and add `understand-anything` to the `plugin` array:
+
+    ```json
+    {
+      "plugin": ["understand-anything@git+https://github.com/Lum1104/Understand-Anything.git"]
+    }
+    ```
+
+    If you already have other plugins listed, append to the existing array:
+
+    ```json
+    {
+      "plugin": [
+        "some-other-plugin",
+        "understand-anything@git+https://github.com/Lum1104/Understand-Anything.git"
+      ]
+    }
+    ```
+  </Step>
+
+  <Step title="Restart OpenCode">
+    Restart OpenCode. The plugin is fetched from GitHub and all skills are registered automatically.
+  </Step>
+</Steps>
+
+## Verification
+
+After restarting, ask OpenCode:
+
+```
+List available skills
+```
+
+You should see `understand`, `understand-chat`, `understand-dashboard`, and other `understand-*` skills in the response.
+
+You can also verify the plugin files were cached:
+
+```bash
+ls ~/.cache/opencode/node_modules/understand-anything
+```
+
+## First Use
+
+Use the skill tool to run the analysis:
+
+```
+use skill tool to load understand-anything/understand
+```
+
+Or simply ask:
+
+```
+Analyze this codebase and build a knowledge graph
+```
+
+## Pinning a Specific Version
+
+To lock to a particular release instead of tracking `main`:
+
+```json
+{
+  "plugin": ["understand-anything@git+https://github.com/Lum1104/Understand-Anything.git#v1.1.1"]
+}
+```
+
+## Updating
+
+Restart OpenCode — the plugin re-installs from git automatically, pulling the latest commit on `main` (or the pinned tag if specified).
+
+## Uninstalling
+
+Remove the plugin line from `opencode.json` and restart OpenCode.
+
+## Troubleshooting
+
+### Skills not found after restart
+
+1. Verify the plugin line is present and correctly formatted in your `opencode.json`.
+2. Check that the cache directory was populated:
+   ```bash
+   ls ~/.cache/opencode/node_modules/understand-anything
+   ```
+3. Use the `skill` tool inside OpenCode to list all discovered skills and confirm they are registered.
+
+### Tool name mapping
+
+When skills reference Claude Code tool names, OpenCode maps them as follows:
+
+| Claude Code tool | OpenCode equivalent |
+|---|---|
+| `TodoWrite` | `todowrite` |
+| `Task` with subagents | `@mention` syntax |
+| `Skill` tool | OpenCode's native `skill` tool |
+| File operations | Your native file tools |
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

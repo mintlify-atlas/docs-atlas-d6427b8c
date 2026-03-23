@@ -1,0 +1,203 @@
+---
+title: Development Setup
+description: Set up the Understand Anything development environment, learn the monorepo structure, and run builds and tests locally.
+---
+
+## Prerequisites
+
+Before you begin, make sure the following are installed:
+
+<CardGroup cols={2}>
+  <Card title="Node.js >= 22" icon="node-js">
+    Developed and tested on v24. Node 22 is the minimum supported version.
+  </Card>
+  <Card title="pnpm >= 10" icon="box">
+    The exact version is pinned via the `packageManager` field in the root
+    `package.json`. Run `corepack enable` to let Corepack manage it automatically.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Using an older Node.js or npm instead of pnpm will likely cause issues. The
+  `packageManager` field pins `pnpm@10.6.2` — Corepack enforces this automatically
+  when you run any `pnpm` command inside the repo.
+</Warning>
+
+## Clone and Install
+
+<Steps>
+  <Step title="Fork and clone the repository">
+    ```bash
+    git clone https://github.com/Lum1104/Understand-Anything.git
+    cd Understand-Anything
+    ```
+  </Step>
+
+  <Step title="Enable Corepack (recommended)">
+    Corepack ships with Node.js 16.9+ and ensures the exact pnpm version declared
+    in `package.json` is used.
+
+    ```bash
+    corepack enable
+    ```
+  </Step>
+
+  <Step title="Install all dependencies">
+    From the repository root, a single install command bootstraps all workspace
+    packages:
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+</Steps>
+
+## Monorepo Structure
+
+The project uses **pnpm workspaces** defined in `pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - 'understand-anything-plugin/packages/*'
+  - 'understand-anything-plugin'
+  - 'homepage'
+```
+
+The full source tree inside `understand-anything-plugin/`:
+
+```
+understand-anything-plugin/
+├── .claude-plugin/         # Plugin manifest and marketplace config
+├── agents/                 # AI agent definitions
+│   ├── project-scanner
+│   ├── file-analyzer
+│   ├── architecture-analyzer
+│   ├── tour-builder
+│   └── graph-reviewer
+├── skills/                 # Skill definitions (/understand, /understand-dashboard, etc.)
+├── src/                    # Skill TypeScript source
+│   └── ...                 # context-builder, diff-analyzer, explain, onboard
+└── packages/
+    ├── core/               # @understand-anything/core — shared analysis engine
+    │   └── src/
+    │       ├── plugins/    # Plugin system (registry, discovery, tree-sitter)
+    │       ├── types.ts    # All shared TypeScript interfaces
+    │       ├── search.ts   # Browser-safe fuzzy/semantic search
+    │       ├── schema.ts   # Zod validation schema for KnowledgeGraph
+    │       └── ...
+    └── dashboard/          # @understand-anything/dashboard — React web dashboard
+```
+
+### Workspace Package Names
+
+| Directory | Package name | Description |
+|-----------|-------------|-------------|
+| `understand-anything-plugin/` | `@understand-anything/skill` | Claude Code plugin skills |
+| `understand-anything-plugin/packages/core/` | `@understand-anything/core` | Shared analysis engine |
+| `understand-anything-plugin/packages/dashboard/` | `@understand-anything/dashboard` | React dashboard |
+
+## Build and Test Commands
+
+All commands are run from the **repository root** using pnpm's `--filter` flag to
+target a specific workspace package.
+
+### Install
+
+```bash
+pnpm install
+```
+
+### Core Package (`@understand-anything/core`)
+
+```bash
+# Build
+pnpm --filter @understand-anything/core build
+
+# Run tests
+pnpm --filter @understand-anything/core test
+```
+
+### Skill Package (`@understand-anything/skill`)
+
+```bash
+# Build
+pnpm --filter @understand-anything/skill build
+
+# Run tests
+pnpm --filter @understand-anything/skill test
+```
+
+### Dashboard (`@understand-anything/dashboard`)
+
+```bash
+# Production build
+pnpm --filter @understand-anything/dashboard build
+
+# Development server with hot reload
+pnpm dev:dashboard
+```
+
+### Linting
+
+```bash
+pnpm lint
+```
+
+This runs ESLint across the entire project.
+
+## Conventions
+
+- **TypeScript strict mode** is enabled everywhere — all type errors must be resolved.
+- **ESM modules** — every package uses `"type": "module"` in `package.json`.
+- **Vitest** is the test runner for both unit and integration tests.
+- Knowledge graph output is written to `.understand-anything/` in the analyzed
+  project directory, not inside this repository.
+
+## Gotchas
+
+### web-tree-sitter vs. native tree-sitter
+
+<Warning>
+  The core package uses `web-tree-sitter` (WASM-based) instead of native
+  `tree-sitter` bindings. Native bindings fail on **darwin/arm64 + Node 24**.
+  Do not attempt to swap in the native package — use `web-tree-sitter` and the
+  pre-built `.wasm` grammar files.
+</Warning>
+
+The `TreeSitterPlugin` calls `await plugin.init()` once during startup to load
+the WASM module and grammar files. All subsequent `analyzeFile`, `resolveImports`,
+and `extractCallGraph` calls are synchronous.
+
+### Dashboard import restrictions
+
+<Warning>
+  The dashboard must **only** import from `@understand-anything/core`'s
+  browser-safe subpath exports:
+
+  ```typescript
+  // Allowed
+  import { ... } from '@understand-anything/core/search';
+  import { ... } from '@understand-anything/core/types';
+  import { ... } from '@understand-anything/core/schema';
+
+  // NOT allowed — pulls in Node.js built-ins (fs, path, etc.)
+  import { ... } from '@understand-anything/core';
+  ```
+
+  The main entry point imports Node.js modules that are not available in the
+  browser. Importing it from the dashboard will cause build failures or runtime
+  errors.
+</Warning>
+
+## Versioning
+
+When preparing a release, bump the version number in **both** of these files and
+keep them in sync:
+
+1. `understand-anything-plugin/package.json` — the `"version"` field
+2. `.claude-plugin/marketplace.json` — the `plugins[0].version` field
+
+<Note>
+  Forgetting to update one of these files will cause the marketplace version to
+  drift out of sync with the published package.
+</Note>

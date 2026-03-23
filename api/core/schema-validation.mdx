@@ -1,0 +1,245 @@
+---
+title: Schema Validation
+description: Zod-based runtime validation for KnowledgeGraph data with structured error reporting.
+---
+
+Schema validation is provided by Zod and is exported via a dedicated browser-safe subpath:
+
+```typescript
+// Recommended: subpath export (browser-safe, no Node.js dependencies)
+import { validateGraph } from '@understand-anything/core/schema';
+
+// Also available from the main entry point
+import { validateGraph, KnowledgeGraphSchema } from '@understand-anything/core';
+```
+
+---
+
+## validateGraph()
+
+```typescript
+export function validateGraph(data: unknown): ValidationResult
+```
+
+Validates an arbitrary value against `KnowledgeGraphSchema`. Returns a `ValidationResult` with either the typed, parsed graph or a list of human-readable error strings.
+
+<ParamField path="data" type="unknown" required>
+  The raw value to validate. Typically a parsed JSON object loaded from `.understand-anything/graph.json`.
+</ParamField>
+
+**Returns** `ValidationResult`
+
+<ResponseField name="success" type="boolean" required>
+  `true` when `data` fully conforms to `KnowledgeGraphSchema`. `false` otherwise.
+</ResponseField>
+
+<ResponseField name="data" type="KnowledgeGraph">
+  The validated and type-narrowed graph object. Only present when `success` is `true`.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of error messages. Only present when `success` is `false`. Each entry follows the pattern `"<dotted.path>: <message>"` or just `"<message>"` for top-level errors.
+</ResponseField>
+
+---
+
+## ValidationResult
+
+```typescript
+export interface ValidationResult {
+  success: boolean;
+  data?: z.infer<typeof KnowledgeGraphSchema>;
+  errors?: string[];
+}
+```
+
+---
+
+## Error format
+
+Errors are derived from Zod's `ZodIssue.path` and `ZodIssue.message`. The path segments are joined with `.` to form a dot-notation path:
+
+```
+nodes.0.complexity: Invalid enum value. Expected 'simple' | 'moderate' | 'complex', received 'high'
+edges.2.weight: Number must be less than or equal to 1
+project.analyzedAt: Required
+```
+
+For root-level validation failures (no path), only the message is returned:
+
+```
+Expected object, received array
+```
+
+---
+
+## Usage example
+
+```typescript
+import { validateGraph } from '@understand-anything/core/schema';
+import { readFile } from 'node:fs/promises';
+
+const raw = JSON.parse(await readFile('.understand-anything/graph.json', 'utf8'));
+const result = validateGraph(raw);
+
+if (result.success) {
+  // result.data is typed as KnowledgeGraph
+  console.log(`Loaded ${result.data.nodes.length} nodes`);
+} else {
+  // result.errors is string[]
+  console.error('Graph validation failed:');
+  for (const err of result.errors!) {
+    console.error(' -', err);
+  }
+}
+```
+
+In the dashboard the validation result drives the error banner:
+
+```typescript
+import { validateGraph } from '@understand-anything/core/schema';
+
+const result = validateGraph(jsonData);
+if (!result.success) {
+  showErrorBanner(result.errors!.join('\n'));
+  return;
+}
+loadGraph(result.data);
+```
+
+---
+
+## KnowledgeGraphSchema
+
+The root Zod schema. Mirrors the `KnowledgeGraph` TypeScript interface exactly.
+
+```typescript
+export const KnowledgeGraphSchema = z.object({
+  version: z.string(),
+  project: ProjectMetaSchema,
+  nodes: z.array(GraphNodeSchema),
+  edges: z.array(GraphEdgeSchema),
+  layers: z.array(LayerSchema),
+  tour: z.array(TourStepSchema),
+});
+```
+
+---
+
+## Sub-schemas
+
+### GraphNodeSchema
+
+```typescript
+export const GraphNodeSchema = z.object({
+  id: z.string(),
+  type: z.enum(["file", "function", "class", "module", "concept"]),
+  name: z.string(),
+  filePath: z.string().optional(),
+  lineRange: z.tuple([z.number(), z.number()]).optional(),
+  summary: z.string(),
+  tags: z.array(z.string()),
+  complexity: z.enum(["simple", "moderate", "complex"]),
+  languageNotes: z.string().optional(),
+});
+```
+
+Validation rules:
+- `lineRange` must be a tuple of exactly two numbers when present — `z.tuple([z.number(), z.number()])`
+- `type` and `complexity` are closed enums; any value not in the list fails validation
+
+### GraphEdgeSchema
+
+```typescript
+export const GraphEdgeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  type: EdgeTypeSchema,
+  direction: z.enum(["forward", "backward", "bidirectional"]),
+  description: z.string().optional(),
+  weight: z.number().min(0).max(1),
+});
+```
+
+Validation rules:
+- `weight` must be in the range `[0, 1]` inclusive
+- `type` must be one of the 18 values in `EdgeTypeSchema`
+
+### EdgeTypeSchema
+
+```typescript
+export const EdgeTypeSchema = z.enum([
+  "imports", "exports", "contains", "inherits", "implements",
+  "calls", "subscribes", "publishes", "middleware",
+  "reads_from", "writes_to", "transforms", "validates",
+  "depends_on", "tested_by", "configures",
+  "related", "similar_to",
+]);
+```
+
+### LayerSchema
+
+```typescript
+export const LayerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  nodeIds: z.array(z.string()),
+});
+```
+
+### TourStepSchema
+
+```typescript
+export const TourStepSchema = z.object({
+  order: z.number(),
+  title: z.string(),
+  description: z.string(),
+  nodeIds: z.array(z.string()),
+  languageLesson: z.string().optional(),
+});
+```
+
+### ProjectMetaSchema
+
+```typescript
+export const ProjectMetaSchema = z.object({
+  name: z.string(),
+  languages: z.array(z.string()),
+  frameworks: z.array(z.string()),
+  description: z.string(),
+  analyzedAt: z.string(),
+  gitCommitHash: z.string(),
+});
+```
+
+---
+
+## Subpath export
+
+The `./schema` subpath is specifically designed for use in browser environments (e.g. the React dashboard) where the main `@understand-anything/core` entry must be avoided because it pulls in Node.js-only modules.
+
+```typescript
+// ✅ Browser-safe
+import { validateGraph } from '@understand-anything/core/schema';
+
+// ✅ Also browser-safe
+import type { GraphNode } from '@understand-anything/core/types';
+import { SearchEngine } from '@understand-anything/core/search';
+
+// ❌ Not browser-safe — imports tree-sitter and Node.js fs modules
+import { validateGraph } from '@understand-anything/core';
+```
+
+The subpath is defined in `package.json`:
+
+```json
+{
+  "exports": {
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "default": "./dist/schema.js"
+    }
+  }
+}
+```

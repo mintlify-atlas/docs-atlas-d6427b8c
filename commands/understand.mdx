@@ -1,0 +1,149 @@
+---
+title: /understand
+description: Analyze a codebase with a multi-agent pipeline to build an interactive knowledge graph of every file, function, class, and dependency.
+---
+
+The `/understand` command is the entry point for Understand Anything. It orchestrates a five-agent pipeline that scans your project, extracts structure and relationships, classifies architectural layers, builds a guided tour, and validates the result — all saved to `.understand-anything/knowledge-graph.json`. Once complete, it automatically opens the interactive dashboard.
+
+Run `/understand` whenever you join a new project, after large refactors, or any time you want a fresh map of the codebase.
+
+## Usage
+
+```bash
+# Analyze the current directory
+/understand
+
+# Force a full rebuild, ignoring the existing graph
+/understand --full
+
+# Scope analysis to a specific subdirectory
+/understand src/payments
+```
+
+## The five-agent pipeline
+
+<Steps>
+  <Step title="project-scanner — Discover">
+    Detects languages, frameworks, and enumerates all source files with line counts. Reads `README.md` and your package manifest (`package.json`, `pyproject.toml`, etc.) for authoritative project metadata.
+
+    Output: `.understand-anything/intermediate/scan-result.json`
+
+    <Note>
+      If your project has more than 200 files, the scanner will ask you to confirm before continuing or suggest scoping to a subdirectory.
+    </Note>
+  </Step>
+
+  <Step title="file-analyzer — Extract">
+    Reads every source file and extracts functions, classes, imports, and their relationships as graph nodes and edges. Batches are processed up to **3 concurrently** for speed.
+
+    Output: `.understand-anything/intermediate/batch-<N>.json`
+  </Step>
+
+  <Step title="architecture-analyzer — Classify">
+    Groups nodes into architectural layers (API, Service, Data, UI, Utility) using the directory tree and framework conventions as evidence.
+
+    Output: `.understand-anything/intermediate/layers.json`
+  </Step>
+
+  <Step title="tour-builder — Narrate">
+    Generates a step-by-step guided tour ordered by dependency, aligned with the project README narrative. Each step points to the files you should read first.
+
+    Output: `.understand-anything/intermediate/tour.json`
+  </Step>
+
+  <Step title="graph-reviewer — Validate">
+    Cross-validates the assembled graph against the file inventory. Removes dangling edges, fills missing required fields, and approves or flags the graph before it is saved.
+
+    Output: `.understand-anything/intermediate/review.json`
+  </Step>
+</Steps>
+
+## Incremental updates
+
+By default, `/understand` only re-analyzes files that changed since the last run:
+
+1. Reads `.understand-anything/meta.json` to get the last git commit hash.
+2. Runs `git diff <lastCommitHash>..HEAD --name-only` to find changed files.
+3. Re-runs `file-analyzer` only on those files, then merges results into the existing graph.
+4. Always re-runs `architecture-analyzer` on the full merged node set, since layer boundaries may shift.
+
+If the commit hash is unchanged, the command reports "Graph is up to date" and exits immediately.
+
+Use `--full` to bypass this check and rebuild from scratch.
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--full` | Force a full rebuild, ignoring any existing graph |
+| `<directory>` | Scope analysis to a subdirectory (e.g. `src/payments`) |
+
+## Output
+
+After a successful run, `.understand-anything/` contains:
+
+```
+.understand-anything/
+  knowledge-graph.json   # Full graph: nodes, edges, layers, tour
+  meta.json              # Last analyzed timestamp, git commit hash, file count
+```
+
+The graph schema:
+
+```json
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "my-app",
+    "languages": ["TypeScript"],
+    "frameworks": ["React", "Express"],
+    "description": "...",
+    "analyzedAt": "2026-03-23T10:00:00Z",
+    "gitCommitHash": "a1b2c3d"
+  },
+  "nodes": [...],
+  "edges": [...],
+  "layers": [...],
+  "tour": [...]
+}
+```
+
+A final summary is printed showing files analyzed, nodes and edges created (by type), layers identified, tour steps generated, and any warnings from the reviewer.
+
+<Info>
+  On success, `/understand` automatically launches `/understand-dashboard` so you can explore the graph immediately. If final validation did not pass, the graph is saved with warnings and dashboard launch is skipped.
+</Info>
+
+## Examples
+
+```bash
+# First-time analysis of the whole project
+/understand
+
+# Rebuild completely after a major refactor
+/understand --full
+
+# Analyze only the authentication module
+/understand src/auth
+
+# After merging a PR, update the graph incrementally
+/understand
+# Output: "Incremental update — 4 files changed. Re-analyzing..."
+```
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="/understand-dashboard" icon="chart-network" href="/commands/understand-dashboard">
+    Explore the knowledge graph visually in an interactive web dashboard.
+  </Card>
+  <Card title="/understand-chat" icon="message" href="/commands/understand-chat">
+    Ask natural-language questions about the codebase using the graph as context.
+  </Card>
+  <Card title="/understand-diff" icon="code-compare" href="/commands/understand-diff">
+    Analyze the impact of your current git changes on the knowledge graph.
+  </Card>
+  <Card title="/understand-onboard" icon="graduation-cap" href="/commands/understand-onboard">
+    Generate a structured onboarding guide for new team members.
+  </Card>
+</CardGroup>

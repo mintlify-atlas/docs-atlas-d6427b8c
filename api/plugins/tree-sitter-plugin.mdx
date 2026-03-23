@@ -1,0 +1,191 @@
+---
+title: TreeSitterPlugin
+description: JavaScript and TypeScript static analysis plugin powered by web-tree-sitter (WASM).
+---
+
+`TreeSitterPlugin` is the built-in implementation of [`AnalyzerPlugin`](/api/plugins/analyzer-plugin) for JavaScript and TypeScript. It uses [web-tree-sitter](https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_web) — a WebAssembly build of the tree-sitter parsing library — to parse source files into concrete syntax trees and extract structural information without spawning any native processes.
+
+## Why web-tree-sitter (WASM) instead of native bindings
+
+The native `tree-sitter` npm package relies on N-API native addons that must be compiled for the specific platform, Node.js version, and CPU architecture at install time. On **darwin/arm64 with Node.js 24** this compilation fails consistently.
+
+`web-tree-sitter` ships pre-compiled `.wasm` files that run inside Node.js's built-in WebAssembly runtime with no native compilation step, making it portable across all platforms and Node.js versions.
+
+---
+
+## Class: TreeSitterPlugin
+
+```typescript
+export class TreeSitterPlugin implements AnalyzerPlugin {
+  readonly name = "tree-sitter";
+  readonly languages = ["typescript", "javascript"];
+
+  async init(): Promise<void>;
+  analyzeFile(filePath: string, content: string): StructuralAnalysis;
+  resolveImports(filePath: string, content: string): ImportResolution[];
+  extractCallGraph(filePath: string, content: string): CallGraphEntry[];
+}
+```
+
+---
+
+## init
+
+Loads the WASM runtime and all language grammars. Must be called and awaited before any other method.
+
+```typescript
+async init(): Promise<void>
+```
+
+Calling `init()` a second time is safe — it returns immediately if already initialized.
+
+During initialization the plugin:
+1. Imports `web-tree-sitter` and calls `Parser.init()` to boot the WASM runtime.
+2. Resolves the `.wasm` grammar files for TypeScript (`.ts`), TSX (`.tsx`), and JavaScript (`.js`/`.mjs`/`.cjs`/`.jsx`) via `createRequire`.
+3. Loads all three grammars in parallel with `Promise.all`.
+
+```typescript
+import { TreeSitterPlugin } from "@understand-anything/core";
+
+const plugin = new TreeSitterPlugin();
+await plugin.init(); // must be awaited
+
+// Safe to call analyzeFile, resolveImports, extractCallGraph now
+```
+
+<Warning>
+  Calling `analyzeFile`, `resolveImports`, or `extractCallGraph` before `init()` completes throws:
+  `"TreeSitterPlugin.init() must be called before use"`
+</Warning>
+
+---
+
+## Language support
+
+| File extension | Language key | Grammar |
+|---|---|---|
+| `.ts` | `typescript` | `tree-sitter-typescript/tree-sitter-typescript.wasm` |
+| `.tsx` | `tsx` | `tree-sitter-typescript/tree-sitter-tsx.wasm` |
+| `.js`, `.mjs`, `.cjs`, `.jsx` | `javascript` | `tree-sitter-javascript/tree-sitter-javascript.wasm` |
+
+When registered with the [`PluginRegistry`](/api/plugins/plugin-registry), the plugin's `languages` array (`["typescript", "javascript"]`) is used for routing. Both `typescript` and `tsx` files are handled through the `"typescript"` language mapping; the correct WASM grammar is selected internally based on the actual file extension.
+
+---
+
+## analyzeFile
+
+Parses a file and extracts all structural declarations.
+
+```typescript
+analyzeFile(filePath: string, content: string): StructuralAnalysis
+```
+
+<ParamField path="filePath" type="string" required>
+  Path to the source file. Used to select the correct grammar (`.ts` → TypeScript, `.tsx` → TSX, `.js`/`.mjs`/`.cjs`/`.jsx` → JavaScript).
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Full source code of the file as a string.
+</ParamField>
+
+Returns a [`StructuralAnalysis`](/api/plugins/analyzer-plugin#structuralanalysis). If tree-sitter fails to produce a tree, an empty analysis `{ functions: [], classes: [], imports: [], exports: [] }` is returned.
+
+The parser and tree are explicitly deleted after use to avoid WASM memory leaks.
+
+### What is extracted
+
+- **Functions** — `function` declarations, arrow functions, and function expressions assigned to variables. Captures name, line range, parameter names (including rest params), and return type annotation.
+- **Classes** — Class declarations with name, line range, method names, and property names.
+- **Imports** — All `import` statements: named imports, default imports, and namespace imports (`* as name`).
+- **Exports** — All `export` statements: named exports, default exports, and re-exports.
+
+```typescript
+const analysis = plugin.analyzeFile("src/auth.ts", source);
+
+// Functions
+analysis.functions.forEach(fn => {
+  console.log(`${fn.name}(${fn.params.join(", ")}): ${fn.returnType ?? "unknown"}`);
+  console.log(`  lines ${fn.lineRange[0]}–${fn.lineRange[1]}`);
+});
+
+// Classes
+analysis.classes.forEach(cls => {
+  console.log(`class ${cls.name} { ${cls.methods.join(", ")} }`);
+});
+
+// Imports
+analysis.imports.forEach(imp => {
+  console.log(`import { ${imp.specifiers.join(", ")} } from "${imp.source}" (line ${imp.lineNumber})`);
+});
+```
+
+---
+
+## resolveImports
+
+Parses import statements and resolves relative specifiers to absolute paths.
+
+```typescript
+resolveImports(filePath: string, content: string): ImportResolution[]
+```
+
+<ParamField path="filePath" type="string" required>
+  Path to the source file. Used as the base directory for resolving relative imports (`./`, `../`).
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Full source code of the file.
+</ParamField>
+
+Internally calls `analyzeFile` and maps the `imports` array:
+- Specifiers starting with `./` or `../` are resolved with `node:path`'s `resolve(dir, source)`.
+- All other specifiers (package imports) are passed through unchanged.
+
+```typescript
+const resolved = plugin.resolveImports("src/auth/session.ts", source);
+
+resolved.forEach(r => {
+  console.log(r.source);        // "./utils"
+  console.log(r.resolvedPath);  // "/home/user/project/src/auth/utils"
+  console.log(r.specifiers);    // ["hashPassword", "compareHash"]
+});
+```
+
+---
+
+## extractCallGraph
+
+Extracts caller→callee relationships by walking the AST and tracking function scope.
+
+```typescript
+extractCallGraph(filePath: string, content: string): CallGraphEntry[]
+```
+
+<ParamField path="filePath" type="string" required>
+  Path to the source file.
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Full source code of the file.
+</ParamField>
+
+Returns an array of [`CallGraphEntry`](/api/plugins/analyzer-plugin#callgraphentry). Returns an empty array if the file cannot be parsed.
+
+### How scope tracking works
+
+The method performs a recursive AST walk maintaining a `functionStack`:
+
+1. When entering a `function_declaration`, `method_definition`, `arrow_function`, or `function_expression` node, the function's name is pushed onto the stack.
+2. When a `call_expression` is encountered and the stack is non-empty, a `CallGraphEntry` is emitted with `caller = stack.top`, `callee = callee expression text`, and the line number.
+3. When leaving the function node, its name is popped from the stack.
+
+Arrow functions and function expressions are named by looking at their parent `variable_declarator` node.
+
+```typescript
+const graph = plugin.extractCallGraph("src/payments.ts", source);
+
+graph.forEach(entry => {
+  console.log(`${entry.caller} calls ${entry.callee} at line ${entry.lineNumber}`);
+  // e.g. "chargeCard calls stripe.charges.create at line 42"
+});
+```

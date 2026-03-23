@@ -1,0 +1,202 @@
+---
+title: AnalyzerPlugin
+description: Interface for implementing language-specific static analysis plugins.
+---
+
+The `AnalyzerPlugin` interface defines the contract that all language analysis plugins must satisfy. Plugins are registered with the [`PluginRegistry`](/api/plugins/plugin-registry) and are responsible for parsing source files, resolving imports, and optionally extracting call graphs.
+
+## AnalyzerPlugin interface
+
+```typescript
+export interface AnalyzerPlugin {
+  name: string;
+  languages: string[];
+  analyzeFile(filePath: string, content: string): StructuralAnalysis;
+  resolveImports(filePath: string, content: string): ImportResolution[];
+  extractCallGraph?(filePath: string, content: string): CallGraphEntry[];
+}
+```
+
+<ResponseField name="name" type="string" required>
+  Unique identifier for this plugin (e.g. `"tree-sitter"`, `"python-ast"`).
+</ResponseField>
+
+<ResponseField name="languages" type="string[]" required>
+  List of language identifiers this plugin handles (e.g. `["typescript", "javascript"]`). These are matched by the registry's language map.
+</ResponseField>
+
+<ResponseField name="analyzeFile" type="(filePath: string, content: string) => StructuralAnalysis" required>
+  Parses `content` as the given `filePath` and returns a [`StructuralAnalysis`](#structuralanalysis).
+</ResponseField>
+
+<ResponseField name="resolveImports" type="(filePath: string, content: string) => ImportResolution[]" required>
+  Parses import statements in `content` and resolves relative paths to absolute paths. Returns an array of [`ImportResolution`](#importresolution).
+</ResponseField>
+
+<ResponseField name="extractCallGraph" type="(filePath: string, content: string) => CallGraphEntry[]">
+  Optional. Extracts caller→callee relationships from the file. Returns an array of [`CallGraphEntry`](#callgraphentry).
+</ResponseField>
+
+---
+
+## StructuralAnalysis
+
+The return type of `analyzeFile`. Contains all structurally interesting declarations found in a source file.
+
+```typescript
+export interface StructuralAnalysis {
+  functions: Array<{
+    name: string;
+    lineRange: [number, number];
+    params: string[];
+    returnType?: string;
+  }>;
+  classes: Array<{
+    name: string;
+    lineRange: [number, number];
+    methods: string[];
+    properties: string[];
+  }>;
+  imports: Array<{
+    source: string;
+    specifiers: string[];
+    lineNumber: number;
+  }>;
+  exports: Array<{
+    name: string;
+    lineNumber: number;
+  }>;
+}
+```
+
+<ResponseField name="functions" type="Array<...>" required>
+  All function and arrow-function declarations found at the top level or exported.
+
+  <Expandable title="properties">
+    <ResponseField name="name" type="string" required>Function name.</ResponseField>
+    <ResponseField name="lineRange" type="[number, number]" required>Start and end line numbers (1-indexed).</ResponseField>
+    <ResponseField name="params" type="string[]" required>Parameter names. Rest parameters are prefixed with `...`.</ResponseField>
+    <ResponseField name="returnType" type="string">Return type annotation, if present (e.g. `"Promise<void>"`).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="classes" type="Array<...>" required>
+  All class declarations found in the file.
+
+  <Expandable title="properties">
+    <ResponseField name="name" type="string" required>Class name.</ResponseField>
+    <ResponseField name="lineRange" type="[number, number]" required>Start and end line numbers (1-indexed).</ResponseField>
+    <ResponseField name="methods" type="string[]" required>Method names defined in the class body.</ResponseField>
+    <ResponseField name="properties" type="string[]" required>Property names defined in the class body.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="imports" type="Array<...>" required>
+  All import statements in the file.
+
+  <Expandable title="properties">
+    <ResponseField name="source" type="string" required>The module specifier as written (e.g. `"./auth"`, `"react"`).</ResponseField>
+    <ResponseField name="specifiers" type="string[]" required>Imported names. Default imports use the local name; namespace imports use `"* as name"`.</ResponseField>
+    <ResponseField name="lineNumber" type="number" required>Line number of the import statement (1-indexed).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exports" type="Array<...>" required>
+  All exported names in the file.
+
+  <Expandable title="properties">
+    <ResponseField name="name" type="string" required>Exported name. Default exports use the string `"default"`.</ResponseField>
+    <ResponseField name="lineNumber" type="number" required>Line number of the export statement (1-indexed).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## ImportResolution
+
+Represents a resolved import statement, returned by `resolveImports`.
+
+```typescript
+export interface ImportResolution {
+  source: string;
+  resolvedPath: string;
+  specifiers: string[];
+}
+```
+
+<ResponseField name="source" type="string" required>
+  The module specifier as written in the source file (e.g. `"./utils"`, `"react"`).
+</ResponseField>
+
+<ResponseField name="resolvedPath" type="string" required>
+  Absolute filesystem path for relative imports, or the original specifier unchanged for package imports (e.g. `"/home/user/project/src/utils"`, `"react"`).
+</ResponseField>
+
+<ResponseField name="specifiers" type="string[]" required>
+  The imported names, identical to `StructuralAnalysis.imports[].specifiers`.
+</ResponseField>
+
+---
+
+## CallGraphEntry
+
+A single caller→callee relationship, returned by the optional `extractCallGraph` method.
+
+```typescript
+export interface CallGraphEntry {
+  caller: string;
+  callee: string;
+  lineNumber: number;
+}
+```
+
+<ResponseField name="caller" type="string" required>
+  Name of the function that contains the call site.
+</ResponseField>
+
+<ResponseField name="callee" type="string" required>
+  Name (or expression text) of the function being called.
+</ResponseField>
+
+<ResponseField name="lineNumber" type="number" required>
+  Line number of the call expression (1-indexed).
+</ResponseField>
+
+---
+
+## Implementing a custom plugin
+
+To add support for a new language, implement `AnalyzerPlugin` and register it with the `PluginRegistry`.
+
+```typescript
+import type { AnalyzerPlugin, StructuralAnalysis, ImportResolution } from "@understand-anything/core";
+import { PluginRegistry } from "@understand-anything/core";
+
+export class PythonPlugin implements AnalyzerPlugin {
+  readonly name = "python";
+  readonly languages = ["python"];
+
+  analyzeFile(filePath: string, content: string): StructuralAnalysis {
+    // Parse the file and return structural info
+    return {
+      functions: [],
+      classes: [],
+      imports: [],
+      exports: [],
+    };
+  }
+
+  resolveImports(filePath: string, content: string): ImportResolution[] {
+    // Resolve import paths
+    return [];
+  }
+
+  // extractCallGraph is optional — omit it if not needed
+}
+
+// Register the plugin
+const registry = new PluginRegistry();
+registry.register(new PythonPlugin());
+```
+
+The registry maps the `"python"` language identifier to this plugin. Any file with a `.py` extension will automatically be routed to it via [`getPluginForFile`](/api/plugins/plugin-registry#getpluginforfile).

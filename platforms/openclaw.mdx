@@ -1,0 +1,93 @@
+---
+title: OpenClaw
+description: Install Understand Anything on OpenClaw using an AI-driven installation flow.
+---
+
+## Overview
+
+OpenClaw is a **supported platform** for Understand Anything. Installation is handled via an AI-driven flow: you instruct OpenClaw to fetch and execute the installation guide directly from the repository.
+
+## Prerequisites
+
+- OpenClaw installed
+- Git installed and available on your `PATH`
+
+## Installation
+
+<Steps>
+  <Step title="Trigger the AI-driven install">
+    Open OpenClaw and send the following message:
+
+    ```
+    Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.openclaw/INSTALL.md
+    ```
+
+    OpenClaw fetches the install guide and executes the steps on your behalf.
+  </Step>
+
+  <Step title="What OpenClaw does for you">
+    The instructions tell OpenClaw to:
+
+    1. Clone the repository to `~/.openclaw/understand-anything`:
+       ```bash
+       git clone https://github.com/Lum1104/Understand-Anything.git ~/.openclaw/understand-anything
+       ```
+
+    2. Create the skills symlink so OpenClaw can discover them:
+       ```bash
+       mkdir -p ~/.openclaw/skills
+       ln -s ~/.openclaw/understand-anything/understand-anything-plugin/skills ~/.openclaw/skills/understand-anything
+       ```
+
+       <Note>
+         On Windows (PowerShell), the equivalent commands use `New-Item` and `mklink /J` instead of `ln -s`.
+       </Note>
+
+    3. Restart OpenClaw to discover the newly linked skills.
+  </Step>
+
+  <Step title="Restart OpenClaw">
+    Restart OpenClaw so it picks up the new skills from `~/.openclaw/skills/understand-anything`.
+  </Step>
+</Steps>
+
+## Verification
+
+After restarting, the following skill commands should be available:
+
+- `@understand` — Analyze the current codebase
+- `@understand-chat` — Ask questions about the knowledge graph
+- `@understand-dashboard` — Launch the interactive dashboard
+
+## First Use
+
+Run the analysis by invoking the skill:
+
+```
+@understand
+```
+
+The multi-agent pipeline scans your project, builds the knowledge graph at `.understand-anything/knowledge-graph.json`, and opens the interactive dashboard on completion.
+
+## Updating
+
+To pull the latest version:
+
+```bash
+cd ~/.openclaw/understand-anything && git pull
+```
+
+The symlink means skills update instantly — no restart needed.
+
+## Uninstalling
+
+```bash
+rm ~/.openclaw/skills/understand-anything
+rm -rf ~/.openclaw/understand-anything
+```
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

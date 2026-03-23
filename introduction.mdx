@@ -1,0 +1,100 @@
+---
+title: "Introduction"
+description: "Turn any codebase into an interactive knowledge graph you can explore, search, and ask questions about."
+---
+
+# Introduction
+
+**You just joined a new team. The codebase is 200,000 lines of code. Where do you even start?**
+
+Understand Anything is a multi-platform AI coding plugin that analyzes your project with a multi-agent pipeline, builds a knowledge graph of every file, function, class, and dependency, then gives you an interactive dashboard to explore it all visually. Stop reading code blind. Start seeing the big picture.
+
+<Info>
+  Understand Anything is open source under the MIT license and works natively with Claude Code, with support for Codex, OpenCode, Cursor, OpenClaw, and Antigravity.
+</Info>
+
+## What it does
+
+Reading code is hard. Understanding a whole codebase is harder. Documentation is always out of date, onboarding takes weeks, and every new feature feels like archaeology.
+
+Understand Anything fixes this by combining **LLM intelligence** with **static analysis** to produce a living, explorable map of your project — with plain-English explanations for everything.
+
+The `/understand` command orchestrates **5 specialized agents** across 7 phases:
+
+| Agent | Role |
+|-------|------|
+| `project-scanner` | Discover files, detect languages and frameworks |
+| `file-analyzer` | Extract functions, classes, imports; produce graph nodes and edges |
+| `architecture-analyzer` | Identify architectural layers |
+| `tour-builder` | Generate guided learning tours |
+| `graph-reviewer` | Validate graph completeness and referential integrity |
+
+File analyzers run in parallel (up to 3 concurrent). The pipeline supports incremental updates — only re-analyzes files that changed since the last run.
+
+## Who it's for
+
+<CardGroup cols={3}>
+  <Card title="Junior Developers" icon="code">
+    Stop drowning in unfamiliar code. Get guided tours that walk you through the architecture step by step, with every function and class explained in plain English.
+  </Card>
+  <Card title="Product Managers & Designers" icon="chart-bar">
+    Finally understand how the system actually works without reading code. Ask questions like "how does authentication work?" and get clear answers grounded in the real codebase.
+  </Card>
+  <Card title="AI-Assisted Developers" icon="robot">
+    Give your AI tools deep context about your project. Use `/understand-diff` before code review, `/understand-explain` to dive into any module, or `/understand-chat` to reason about architecture.
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Interactive Knowledge Graph" icon="diagram-project">
+    Files, functions, classes, and their relationships visualized with React Flow. Click any node to see its code and connections.
+  </Card>
+  <Card title="Plain-English Summaries" icon="message">
+    Every node described by an LLM so anyone — technical or not — can understand what it does and why it exists.
+  </Card>
+  <Card title="Guided Tours" icon="map">
+    Auto-generated walkthroughs of the architecture, ordered by dependency. Learn the codebase in the right order.
+  </Card>
+  <Card title="Fuzzy & Semantic Search" icon="magnifying-glass">
+    Find anything by name or by meaning. Search "which parts handle auth?" and get relevant results across the graph.
+  </Card>
+  <Card title="Diff Impact Analysis" icon="code-compare">
+    See which parts of the system your changes affect before you commit. Understand ripple effects across the codebase.
+  </Card>
+  <Card title="Layer Visualization" icon="layer-group">
+    Automatic grouping by architectural layer — API, Service, Data, UI, Utility — with color-coded legend.
+  </Card>
+</CardGroup>
+
+## Output
+
+After running `/understand`, the plugin writes two files to your project:
+
+- **`.understand-anything/knowledge-graph.json`** — The full graph with nodes, edges, layers, and tour steps
+- **`.understand-anything/meta.json`** — Metadata including the git commit hash for incremental update tracking
+
+The dashboard is launched automatically once the graph passes validation.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/understand` | Analyze the codebase and build the knowledge graph |
+| `/understand-dashboard` | Open the interactive visual dashboard |
+| `/understand-chat` | Ask questions about the codebase in natural language |
+| `/understand-diff` | Analyze the impact of your current uncommitted changes |
+| `/understand-explain` | Deep-dive into a specific file or function |
+| `/understand-onboard` | Generate an onboarding guide for new team members |
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Install the plugin and analyze your first codebase in under five minutes.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Platform-specific install instructions for Claude Code, Codex, OpenCode, Cursor, OpenClaw, and Antigravity.
+  </Card>
+</CardGroup>

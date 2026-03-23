@@ -1,0 +1,185 @@
+---
+title: Multi-Agent Pipeline
+description: How Understand Anything orchestrates five specialized AI agents to analyze your codebase and assemble the knowledge graph.
+---
+
+Running `/understand` kicks off a **multi-agent pipeline** — a coordinated sequence of specialized AI agents that each take on one well-defined job. No single agent tries to do everything; instead, each agent writes intermediate results to disk and passes them on to the next stage.
+
+## The five agents
+
+<CardGroup cols={2}>
+  <Card title="project-scanner" icon="radar">
+    Discovers every source file, detects languages and frameworks, and estimates project complexity. The lightest agent in the pipeline.
+  </Card>
+  <Card title="file-analyzer" icon="magnifying-glass">
+    Extracts functions, classes, and imports from each file, then produces `GraphNode` and `GraphEdge` objects. Runs in parallel batches.
+  </Card>
+  <Card title="architecture-analyzer" icon="sitemap">
+    Examines the full file inventory and import graph to identify architectural layers (API, Service, Data, UI, etc.).
+  </Card>
+  <Card title="tour-builder" icon="map">
+    Generates the guided learning tour — an ordered sequence of steps that walks a newcomer through the codebase in dependency order.
+  </Card>
+  <Card title="graph-reviewer" icon="shield-check">
+    Validates the assembled graph for completeness and referential integrity. Flags missing nodes, dangling edges, and schema violations.
+  </Card>
+</CardGroup>
+
+---
+
+## Pipeline phases
+
+<Steps>
+  <Step title="Phase 0 — Pre-flight">
+    Before any agents are launched, the orchestrator reads the current git commit hash and checks whether an existing graph is present.
+
+    | Condition | Action |
+    |-----------|--------|
+    | `--full` flag passed | Full analysis |
+    | No existing graph | Full analysis |
+    | Graph present, same commit hash | Report "up to date" and stop |
+    | Graph present, changed files detected | Incremental update |
+
+    It also collects context that will be injected into every subagent: the project README, the primary package manifest, and the top-level directory tree.
+  </Step>
+
+  <Step title="Phase 1 — Scan">
+    The **project-scanner** agent crawls the project directory. It writes its findings to:
+
+    ```
+    .understand-anything/intermediate/scan-result.json
+    ```
+
+    Output includes:
+    - Project name and description
+    - Detected languages and frameworks
+    - Full file list with line counts
+    - Complexity estimate
+
+    <Note>
+      If the scan discovers more than 200 files, the pipeline pauses and asks for confirmation before continuing. You can scope the analysis to a subdirectory: `/understand src/payments`.
+    </Note>
+  </Step>
+
+  <Step title="Phase 2 — Analyze">
+    The file list from Phase 1 is split into **batches of 5–10 files**. Each batch is dispatched to a **file-analyzer** agent.
+
+    Up to **3 file-analyzer agents run concurrently**, so large codebases are analyzed in parallel rather than serially.
+
+    Each agent writes its results to a numbered intermediate file:
+
+    ```
+    .understand-anything/intermediate/batch-0.json
+    .understand-anything/intermediate/batch-1.json
+    ...
+    ```
+
+    Each batch file contains arrays of `GraphNode` and `GraphEdge` objects covering the files in that batch.
+
+    For **incremental updates**, only the changed files are batched and analyzed — unchanged files keep their existing nodes and edges.
+  </Step>
+
+  <Step title="Phase 3 — Assemble">
+    The orchestrator merges all batch results into a single unified node and edge set:
+
+    - Duplicate node IDs are deduplicated (last occurrence wins)
+    - Duplicate edges (same `source + target + type`) are deduplicated
+    - Edges whose `source` or `target` reference a non-existent node are removed
+    - All removals are logged for the reviewer in Phase 6
+  </Step>
+
+  <Step title="Phase 4 — Architecture">
+    The **architecture-analyzer** agent receives the full merged file inventory and the import edge list. It identifies logical architectural layers and writes them to:
+
+    ```
+    .understand-anything/intermediate/layers.json
+    ```
+
+    Framework-specific hints are injected automatically. For example, React projects get hints about `app/` → UI Layer, `api/` → API Layer; Django projects get hints about `views/` → API Layer, `models/` → Data Layer.
+
+    After the agent completes, the orchestrator normalizes the output (converting file paths to node IDs, filling missing `id` fields, dropping dangling references) before adding the layers to the assembled graph.
+
+    For incremental updates, architecture analysis always re-runs on the full merged node set, since layer assignments can shift when files change.
+  </Step>
+
+  <Step title="Phase 5 — Tour">
+    The **tour-builder** agent receives a summary of all nodes, the layer definitions, and key edges. It generates a guided walkthrough ordered by dependency flow, starting from entry points and ending with utilities.
+
+    Results are written to:
+
+    ```
+    .understand-anything/intermediate/tour.json
+    ```
+
+    The orchestrator normalizes the output (unwrapping envelopes, renaming legacy fields, converting file paths, dropping dangling references, sorting by `order`) before adding the tour to the assembled graph.
+  </Step>
+
+  <Step title="Phase 6 — Review">
+    The orchestrator assembles the final `KnowledgeGraph` JSON and writes it to:
+
+    ```
+    .understand-anything/intermediate/assembled-graph.json
+    ```
+
+    The **graph-reviewer** agent then validates this file against the full schema and cross-checks every node against the original scan inventory. It writes a structured report to:
+
+    ```
+    .understand-anything/intermediate/review.json
+    ```
+
+    If the reviewer flags issues, the orchestrator applies automated fixes (removing dangling edges, filling default values, removing invalid node types). If critical issues remain after one fix attempt, the graph is saved with warnings and dashboard auto-launch is skipped.
+  </Step>
+
+  <Step title="Phase 7 — Save">
+    The validated graph is written to its final location:
+
+    ```
+    .understand-anything/knowledge-graph.json
+    ```
+
+    Metadata is written to:
+
+    ```
+    .understand-anything/meta.json
+    ```
+
+    All intermediate files under `.understand-anything/intermediate/` are deleted. The pipeline reports a summary: files analyzed, nodes and edges created by type, layers identified, tour steps generated, and any warnings from the reviewer.
+
+    If validation passed, the dashboard is automatically launched via `/understand-dashboard`.
+  </Step>
+</Steps>
+
+---
+
+## Model selection
+
+Agents use different models depending on the complexity of their task:
+
+| Agent | Model | Reason |
+|-------|-------|--------|
+| `project-scanner` | Sonnet | Lightweight file discovery and classification |
+| `file-analyzer` | Opus | Deep per-file analysis requiring accurate code understanding |
+| `architecture-analyzer` | Opus | Reasoning across many files to identify cross-cutting concerns |
+| `tour-builder` | Opus | Narrative generation requiring broad context and good judgment |
+| `graph-reviewer` | Sonnet | Structured validation against a known schema — no creative reasoning needed |
+
+<Tip>
+  Using Sonnet for the reviewer keeps costs low without sacrificing accuracy — schema validation is deterministic and does not need Opus's reasoning depth.
+</Tip>
+
+---
+
+## Intermediate files
+
+All intermediate results are written to `.understand-anything/intermediate/` **on disk**. Agents do not return results back to the main agent context — they write files and exit. This keeps the main context window small and allows the orchestrator to handle very large codebases without hitting token limits.
+
+Intermediate files are cleaned up automatically at the end of Phase 7. If the pipeline is interrupted mid-run, you may find leftover files in `.understand-anything/intermediate/` — these can be safely deleted.
+
+---
+
+## Error handling
+
+- Every agent failure triggers one automatic retry with additional context about the failure.
+- If a retry fails, that phase is skipped and the pipeline continues with partial results.
+- Partial results are always saved — a partial graph is better than no graph.
+- All failures are reported in the final summary and never silently dropped.

@@ -1,0 +1,271 @@
+---
+title: Plugin System
+description: Learn how the Understand Anything plugin system works, how plugins are discovered and registered, and how to create your own analyzer plugin.
+---
+
+The plugin system provides a language-agnostic way to add static analysis
+capabilities to Understand Anything. Each **analyzer plugin** implements a
+common interface and is responsible for a set of programming languages. The
+core engine delegates all file analysis to whichever plugin claims that
+language.
+
+## The `AnalyzerPlugin` Interface
+
+Every analyzer plugin must implement the `AnalyzerPlugin` interface defined in
+`packages/core/src/types.ts`:
+
+```typescript
+export interface AnalyzerPlugin {
+  name: string;
+  languages: string[];
+  analyzeFile(filePath: string, content: string): StructuralAnalysis;
+  resolveImports(filePath: string, content: string): ImportResolution[];
+  extractCallGraph?(filePath: string, content: string): CallGraphEntry[];
+}
+```
+
+| Member | Required | Description |
+|--------|----------|-------------|
+| `name` | Yes | Unique identifier for the plugin (e.g. `"tree-sitter"`) |
+| `languages` | Yes | List of language names this plugin handles (e.g. `["typescript", "javascript"]`) |
+| `analyzeFile` | Yes | Extracts functions, classes, imports, and exports from a file |
+| `resolveImports` | Yes | Resolves import paths to absolute or package identifiers |
+| `extractCallGraph` | No | Optional — extracts caller/callee relationships |
+
+## Supporting Types
+
+The three return types used by `AnalyzerPlugin` are also defined in
+`packages/core/src/types.ts`:
+
+```typescript
+export interface StructuralAnalysis {
+  functions: Array<{
+    name: string;
+    lineRange: [number, number];
+    params: string[];
+    returnType?: string;
+  }>;
+  classes: Array<{
+    name: string;
+    lineRange: [number, number];
+    methods: string[];
+    properties: string[];
+  }>;
+  imports: Array<{ source: string; specifiers: string[]; lineNumber: number }>;
+  exports: Array<{ name: string; lineNumber: number }>;
+}
+
+export interface ImportResolution {
+  source: string;
+  resolvedPath: string;
+  specifiers: string[];
+}
+
+export interface CallGraphEntry {
+  caller: string;
+  callee: string;
+  lineNumber: number;
+}
+```
+
+## Plugin Discovery and Configuration
+
+Plugin configuration lives in a `PluginConfig` object. The types are defined in
+`packages/core/src/plugins/discovery.ts`:
+
+```typescript
+export interface PluginEntry {
+  name: string;
+  enabled: boolean;
+  languages: string[];
+  options?: Record<string, unknown>;
+}
+
+export interface PluginConfig {
+  plugins: PluginEntry[];
+}
+```
+
+The built-in default config enables the `tree-sitter` plugin for TypeScript and
+JavaScript:
+
+```typescript
+export const DEFAULT_PLUGIN_CONFIG: PluginConfig = {
+  plugins: [
+    {
+      name: "tree-sitter",
+      enabled: true,
+      languages: ["typescript", "javascript"],
+    },
+  ],
+};
+```
+
+Two helpers are exported to load and save config:
+
+```typescript
+// Parse a JSON string into PluginConfig (returns DEFAULT_PLUGIN_CONFIG on failure)
+parsePluginConfig(jsonString: string): PluginConfig
+
+// Serialize a PluginConfig to a JSON string for saving
+serializePluginConfig(config: PluginConfig): string
+```
+
+## `PluginRegistry`
+
+`PluginRegistry` (defined in `packages/core/src/plugins/registry.ts`) is the
+central store that maps languages to plugins. The file analyzer and the
+context-builder both go through this registry.
+
+```typescript
+export class PluginRegistry {
+  register(plugin: AnalyzerPlugin): void;
+  unregister(name: string): void;
+  getPluginForLanguage(language: string): AnalyzerPlugin | null;
+  getPluginForFile(filePath: string): AnalyzerPlugin | null;
+  analyzeFile(filePath: string, content: string): StructuralAnalysis | null;
+  resolveImports(filePath: string, content: string): ImportResolution[] | null;
+  getPlugins(): AnalyzerPlugin[];
+  getSupportedLanguages(): string[];
+}
+```
+
+### Language-to-extension mapping
+
+The registry maps file extensions to language names using a built-in table:
+
+| Extension(s) | Language |
+|-------------|----------|
+| `.ts`, `.tsx` | `typescript` |
+| `.js`, `.jsx` | `javascript` |
+| `.py` | `python` |
+| `.go` | `go` |
+| `.rs` | `rust` |
+| `.rb` | `ruby` |
+| `.java` | `java` |
+| `.kt` | `kotlin` |
+| `.cs` | `csharp` |
+| `.cpp` | `cpp` |
+| `.c` | `c` |
+| `.swift` | `swift` |
+| `.php` | `php` |
+
+If you register a plugin for any of these languages, `getPluginForFile` will
+route files with the matching extension to your plugin automatically.
+
+## Creating a Custom Analyzer Plugin
+
+<Steps>
+  <Step title="Implement the AnalyzerPlugin interface">
+    Create a class (or plain object) that satisfies `AnalyzerPlugin`:
+
+    ```typescript
+    import type {
+      AnalyzerPlugin,
+      StructuralAnalysis,
+      ImportResolution,
+      CallGraphEntry,
+    } from '@understand-anything/core/types';
+
+    export class MyLanguagePlugin implements AnalyzerPlugin {
+      readonly name = 'my-language';
+      readonly languages = ['mylang'];
+
+      analyzeFile(filePath: string, content: string): StructuralAnalysis {
+        // Parse `content` and extract functions, classes, imports, exports.
+        return {
+          functions: [],
+          classes: [],
+          imports: [],
+          exports: [],
+        };
+      }
+
+      resolveImports(filePath: string, content: string): ImportResolution[] {
+        const analysis = this.analyzeFile(filePath, content);
+        return analysis.imports.map((imp) => ({
+          source: imp.source,
+          resolvedPath: imp.source, // resolve relative paths as needed
+          specifiers: imp.specifiers,
+        }));
+      }
+
+      // Optional
+      extractCallGraph(filePath: string, content: string): CallGraphEntry[] {
+        return [];
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Register the plugin with PluginRegistry">
+    Instantiate your plugin and register it before running any analysis:
+
+    ```typescript
+    import { PluginRegistry } from '@understand-anything/core';
+    import { MyLanguagePlugin } from './my-language-plugin.js';
+
+    const registry = new PluginRegistry();
+    const plugin = new MyLanguagePlugin();
+
+    // If your plugin needs async initialization (e.g. loading WASM)
+    // await plugin.init();
+
+    registry.register(plugin);
+    ```
+  </Step>
+
+  <Step title="Use the registry to analyze files">
+    Once registered, the registry automatically routes files to the correct
+    plugin based on file extension:
+
+    ```typescript
+    import { readFileSync } from 'node:fs';
+
+    const content = readFileSync('/path/to/file.mylang', 'utf-8');
+
+    const analysis = registry.analyzeFile('/path/to/file.mylang', content);
+    // Returns null if no plugin is registered for the file extension
+
+    const imports = registry.resolveImports('/path/to/file.mylang', content);
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Plugin names must be unique within a registry. Registering a second plugin
+  with the same `name` will not replace the first — each language key in
+  `languageMap` is overwritten, but both plugin entries remain in the internal
+  list. Use `unregister(name)` first if you need to replace a plugin.
+</Note>
+
+## The Built-in `TreeSitterPlugin`
+
+The built-in plugin (`packages/core/src/plugins/tree-sitter-plugin.ts`) covers
+TypeScript, TSX, and JavaScript using `web-tree-sitter` (WASM).
+
+Key characteristics:
+
+- Requires an async `init()` call to load the WASM runtime and grammar files.
+  After that, `analyzeFile`, `resolveImports`, and `extractCallGraph` are all
+  **synchronous**.
+- Implements the optional `extractCallGraph` method to track caller/callee
+  relationships at the function level.
+- Uses `createRequire` to resolve `.wasm` grammar paths from inside an ESM
+  module.
+
+```typescript
+import { TreeSitterPlugin } from '@understand-anything/core';
+
+const plugin = new TreeSitterPlugin();
+await plugin.init(); // Must be awaited once before any analysis
+
+const registry = new PluginRegistry();
+registry.register(plugin);
+```
+
+<Warning>
+  Always await `TreeSitterPlugin.init()` before registering it or calling any
+  analysis methods. Calling `analyzeFile` before `init()` completes throws an
+  error.
+</Warning>

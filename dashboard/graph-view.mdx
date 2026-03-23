@@ -1,0 +1,117 @@
+---
+title: "Graph view"
+description: "The main canvas of the Understand Anything dashboard. Every file, function, class, module, and concept in your codebase is a node. Relationships are edges."
+---
+
+The graph view occupies 75% of the dashboard viewport. It is powered by [React Flow](https://reactflow.dev) and arranged with Dagre auto-layout, so nodes are positioned automatically based on dependency direction.
+
+## Node types
+
+Every node has a type indicated by a colored left border bar and a type badge in the top-left corner of the node card.
+
+| Type | Color | Represents |
+|------|-------|------------|
+| `file` | Blue | A source file in the project |
+| `function` | Green | A named function or method |
+| `class` | Purple/violet | A class definition |
+| `module` | Amber | A package, directory, or logical module |
+| `concept` | Pink | An abstract concept identified by the architecture analyzer |
+
+Each node card also shows:
+
+- **Node name** (truncated to 24 characters with ellipsis)
+- **Complexity badge** — `simple` (green), `moderate` (gold), or `complex` (red)
+- **Summary** — a two-line LLM-generated plain-English description
+
+## Clicking nodes
+
+**Clicking any node** selects it. Two things happen simultaneously:
+
+1. The right sidebar switches to the **NodeInfo** panel, showing the full node details.
+2. The **CodeViewer overlay** slides up from the bottom of the graph area (40% viewport height), showing the node's summary, language notes, tags, and file path.
+
+Clicking the canvas background (outside any node) deselects the current node and returns the sidebar to **ProjectOverview**.
+
+<Note>
+  The CodeViewer does not display raw source code — it shows a styled summary overlay with the LLM-generated description, language notes, and metadata. The actual source file is available at the path shown in the overlay.
+</Note>
+
+## Code viewer overlay
+
+The overlay slides up from the bottom of the graph area with a smooth animation. It contains:
+
+- **Node type badge** and name in the header
+- **File path** and line range (if available)
+- **Summary** section with the LLM description
+- **Language notes** callout (if the node uses notable patterns)
+- **Tags** pills
+
+Close the overlay with the **Close** button in the header or click a different node to switch to it.
+
+## Edges and relationships
+
+Edges connect related nodes. Each edge has a `type` label that describes the relationship:
+
+| Edge type | Meaning |
+|-----------|---------|
+| `calls` | The source node calls the target function/method |
+| `imports` | The source file imports from the target |
+| `extends` | The source class extends the target class |
+| `uses` | A general dependency relationship |
+
+Edges with type `calls` are **animated** by default (dashed flowing stroke) to make call chains easy to spot.
+
+Edge color uses a subtle gold tone (`rgba(212,165,116,0.3)`) against the dark background. When diff mode is active, edges involving changed nodes become brighter and more saturated.
+
+## Zooming and panning
+
+- **Scroll** to zoom in and out
+- **Click and drag** the background to pan
+- **Ctrl+Scroll** (or pinch on trackpad) for precision zoom
+- The **Controls** widget (bottom-left of the canvas) has zoom in, zoom out, and fit-view buttons
+- The **MiniMap** (bottom-right) shows a bird's-eye overview and lets you click to jump to any area
+
+Zoom range is 1% to 200%. The graph fits to the full node set on initial load.
+
+When you select a node (or a tour highlights a group of nodes), the canvas automatically pans and zooms to bring those nodes into view with a 300ms animation.
+
+## Dagre auto-layout
+
+The graph is laid out with [Dagre](https://github.com/dagrejs/dagre), a directed acyclic graph layout algorithm. Nodes are arranged top-to-bottom following dependency direction — higher-level modules appear near the top; leaf nodes (utilities, helpers) appear near the bottom.
+
+Layout runs once when the graph loads (or when the persona filter changes). You can drag individual nodes to reposition them manually.
+
+## Layer grouping
+
+Click **Layers** in the header to toggle architectural layer grouping.
+
+When layers are on, nodes in the same architectural layer (API, Service, Data, UI, Utility, etc.) are enclosed in a labeled group box with a dashed gold border. Each layer gets a distinct color from an eight-color palette (blue, green, amber, violet, pink, cyan, orange, stone).
+
+The **LayerLegend** in the header shows a dot and label for each layer currently visible. The node count for each layer is shown in parentheses.
+
+<Tip>
+  Layer grouping is most useful when you want to understand the high-level architecture at a glance. Turn it off when you need to trace specific call paths without the visual grouping.
+</Tip>
+
+## Diff impact overlay
+
+If the dashboard has loaded diff data (from `/understand-diff`), the **Diff** toggle appears in the header.
+
+When diff mode is active:
+
+- **Changed nodes** (red ring + glow) — files directly modified in your current changes
+- **Affected nodes** (amber ring + glow) — nodes transitively impacted by the changes
+- **Unrelated nodes** — faded out to reduce visual noise
+- **Edges** between changed/affected nodes become brighter; edges connecting to unrelated nodes fade
+
+The header legend shows the count of changed and affected nodes.
+
+<Info>
+  Diff data is loaded from `diff-overlay.json` in the same directory as `knowledge-graph.json`. This file is generated by `/understand-diff`.
+</Info>
+
+## Persona filtering
+
+The **Overview** persona (non-technical mode) filters the graph to show only `concept`, `module`, and `file` nodes. Functions, classes, and internal edges are hidden to reduce complexity for non-technical viewers.
+
+All other personas show the full graph. See [Personas](/dashboard/personas) for details.

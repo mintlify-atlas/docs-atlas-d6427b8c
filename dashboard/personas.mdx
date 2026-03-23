@@ -1,0 +1,73 @@
+---
+title: "Personas"
+description: "Personas adapt the dashboard's level of detail for different audiences. Switch between Overview, Learn, and Deep Dive modes in the header."
+---
+
+Not everyone looking at a codebase needs the same information. A product manager exploring how authentication works has different needs than a senior engineer tracing a performance regression. Personas let you switch the dashboard's focus without leaving the page.
+
+The **PersonaSelector** is in the header, to the right of the project name. It renders as a small segmented control with three options.
+
+## The three personas
+
+<CardGroup cols={3}>
+  <Card title="Overview" icon="binoculars">
+    High-level architecture view. Intended for non-technical stakeholders: product managers, designers, and executives.
+  </Card>
+  <Card title="Learn" icon="graduation-cap">
+    Full dashboard with guided learning. Intended for junior developers and anyone new to the codebase.
+  </Card>
+  <Card title="Deep Dive" icon="code">
+    Code-focused view with all node types visible. Intended for experienced engineers.
+  </Card>
+</CardGroup>
+
+## Overview (non-technical)
+
+The Overview persona filters the graph to show only high-level nodes:
+
+- `concept` nodes — abstract ideas identified by the architecture analyzer
+- `module` nodes — packages, directories, or logical groupings
+- `file` nodes — individual source files
+
+Function and class nodes are hidden, along with any edges that connect only to hidden nodes. This gives non-technical viewers a clean architectural diagram without the implementation details.
+
+<Tip>
+  Use Overview when walking a stakeholder through how the system is structured, or when you want to quickly orient yourself in an unfamiliar codebase before diving deeper.
+</Tip>
+
+## Learn (junior developer)
+
+The Learn persona shows the full graph and replaces the default sidebar with the **LearnPanel**.
+
+The LearnPanel is always visible in this mode — it does not wait for a node to be selected. It shows the guided tour interface, including:
+
+- A list of all tour steps before the tour starts
+- A **Start Tour** button
+- Step-by-step navigation once the tour is running
+- Language lessons embedded in each step
+
+See [Guided tours](/dashboard/guided-tours) for a full description of the LearnPanel and tour navigation.
+
+<Note>
+  The Learn persona is the default when you first open the dashboard. If a tour is available, you are immediately presented with the option to start it.
+</Note>
+
+## Deep Dive (experienced developer)
+
+The Deep Dive persona shows the full graph with all node types (file, function, class, module, concept) and all edges. The sidebar behaves as in the default state:
+
+- **ProjectOverview** when no node is selected
+- **NodeInfo** when a node is selected
+
+This persona is designed for engineers who want to trace specific call paths, inspect function signatures, or understand class hierarchies without the learning scaffolding.
+
+## How personas affect the sidebar
+
+The sidebar panel shown at any given moment follows this priority order:
+
+1. **Learn persona active** → LearnPanel (always, regardless of node selection)
+2. **Any persona, tour running** → LearnPanel
+3. **Any persona, node selected** → NodeInfo
+4. **Any persona, no node selected** → ProjectOverview
+
+Switching personas mid-session does not reset your selected node or tour position.

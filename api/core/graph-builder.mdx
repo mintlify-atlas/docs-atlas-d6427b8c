@@ -1,0 +1,280 @@
+---
+title: GraphBuilder
+description: Programmatic builder for constructing a KnowledgeGraph from file analysis results and structural data.
+---
+
+`GraphBuilder` is a stateful builder class that accumulates nodes and edges from file analysis results and produces a complete `KnowledgeGraph` with a single call to `build()`.
+
+```typescript
+import { GraphBuilder } from '@understand-anything/core';
+```
+
+---
+
+## Constructor
+
+```typescript
+constructor(projectName: string, gitHash: string)
+```
+
+<ParamField path="projectName" type="string" required>
+  Human-readable name for the project. Written into `KnowledgeGraph.project.name`.
+</ParamField>
+
+<ParamField path="gitHash" type="string" required>
+  Git commit SHA at the time of analysis. Written into `KnowledgeGraph.project.gitCommitHash`.
+</ParamField>
+
+---
+
+## Methods
+
+### addFile()
+
+```typescript
+addFile(filePath: string, meta: FileMeta): void
+```
+
+Adds a single file node without deep structural analysis. Use this when only high-level metadata is available (e.g. from a lightweight scan pass).
+
+The node `id` is set to `file:<filePath>`. The `name` is derived from the last path segment. Language detection is performed automatically from the file extension and the detected language is added to the internal language set.
+
+<ParamField path="filePath" type="string" required>
+  Relative file path (e.g. `src/server/index.ts`). Used as part of the node `id` and stored on the node.
+</ParamField>
+
+<ParamField path="meta" type="FileMeta" required>
+  Metadata for the file node.
+
+  <Expandable title="FileMeta fields">
+    <ParamField path="summary" type="string" required>
+      LLM-generated summary of the file's purpose.
+    </ParamField>
+    <ParamField path="tags" type="string[]" required>
+      Keyword tags for search indexing.
+    </ParamField>
+    <ParamField path="complexity" type='"simple" | "moderate" | "complex"' required>
+      Estimated complexity of the file.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+### addFileWithAnalysis()
+
+```typescript
+addFileWithAnalysis(
+  filePath: string,
+  analysis: StructuralAnalysis,
+  meta: FileAnalysisMeta,
+): void
+```
+
+Adds a file node along with child `function` and `class` nodes extracted from a full structural analysis. For each function and class, a `contains` edge is automatically created from the file node.
+
+This method is used by the agent pipeline when deep per-file analysis has been performed.
+
+**Node IDs assigned:**
+- File: `file:<filePath>`
+- Function: `func:<filePath>:<functionName>`
+- Class: `class:<filePath>:<className>`
+
+<ParamField path="filePath" type="string" required>
+  Relative path to the source file.
+</ParamField>
+
+<ParamField path="analysis" type="StructuralAnalysis" required>
+  Structural analysis result from a parser or tree-sitter plugin.
+
+  <Expandable title="StructuralAnalysis fields">
+    <ParamField path="functions" type="Array<{ name: string; lineRange: [number, number]; params: string[]; returnType?: string }>" required>
+      List of functions detected in the file.
+    </ParamField>
+    <ParamField path="classes" type="Array<{ name: string; lineRange: [number, number]; methods: string[]; properties: string[] }>" required>
+      List of classes detected in the file.
+    </ParamField>
+    <ParamField path="imports" type="Array<{ source: string; specifiers: string[]; lineNumber: number }>" required>
+      Import statements found in the file.
+    </ParamField>
+    <ParamField path="exports" type="Array<{ name: string; lineNumber: number }>" required>
+      Exported symbols from the file.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="meta" type="FileAnalysisMeta" required>
+  Extended metadata including per-symbol summaries.
+
+  <Expandable title="FileAnalysisMeta fields">
+    <ParamField path="fileSummary" type="string" required>
+      LLM-generated summary for the file node.
+    </ParamField>
+    <ParamField path="summaries" type="Record<string, string>" required>
+      Map of function or class name to its LLM-generated summary. Used to populate each child node's `summary` field. Falls back to an empty string if the name is not present.
+    </ParamField>
+    <ParamField path="tags" type="string[]" required>
+      Keyword tags for the file node.
+    </ParamField>
+    <ParamField path="complexity" type='"simple" | "moderate" | "complex"' required>
+      Complexity inherited by all child nodes created from this file.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+### addImportEdge()
+
+```typescript
+addImportEdge(fromFile: string, toFile: string): void
+```
+
+Adds an `imports` edge between two file nodes with a default weight of `0.7`.
+
+<ParamField path="fromFile" type="string" required>
+  Relative path of the importing file. The source node ID will be `file:<fromFile>`.
+</ParamField>
+
+<ParamField path="toFile" type="string" required>
+  Relative path of the imported file. The target node ID will be `file:<toFile>`.
+</ParamField>
+
+---
+
+### addCallEdge()
+
+```typescript
+addCallEdge(
+  callerFile: string,
+  callerFunc: string,
+  calleeFile: string,
+  calleeFunc: string,
+): void
+```
+
+Adds a `calls` edge between two function nodes with a default weight of `0.8`.
+
+<ParamField path="callerFile" type="string" required>
+  Relative path of the file containing the calling function.
+</ParamField>
+
+<ParamField path="callerFunc" type="string" required>
+  Name of the calling function. The source node ID will be `func:<callerFile>:<callerFunc>`.
+</ParamField>
+
+<ParamField path="calleeFile" type="string" required>
+  Relative path of the file containing the called function.
+</ParamField>
+
+<ParamField path="calleeFunc" type="string" required>
+  Name of the called function. The target node ID will be `func:<calleeFile>:<calleeFunc>`.
+</ParamField>
+
+---
+
+### build()
+
+```typescript
+build(): KnowledgeGraph
+```
+
+Assembles all accumulated nodes and edges into a complete `KnowledgeGraph` and returns it. Does not mutate the builder — you can continue calling `addFile*` methods and call `build()` again.
+
+**What `build()` sets automatically:**
+- `version`: always `"1.0.0"`
+- `project.languages`: sorted array of all detected languages
+- `project.frameworks`: `[]` (not populated by `GraphBuilder`)
+- `project.description`: `""` (not populated by `GraphBuilder`)
+- `project.analyzedAt`: `new Date().toISOString()` at call time
+- `layers`: `[]` (populated separately by `detectLayers`)
+- `tour`: `[]` (populated separately by tour generation)
+
+**Returns** `KnowledgeGraph`
+
+---
+
+## Language detection
+
+`GraphBuilder` automatically detects the programming language from the file extension and tracks it internally. The `languages` array on the built graph contains only languages actually seen in the added files.
+
+Supported extension mappings:
+
+| Extensions | Language |
+|---|---|
+| `.ts`, `.tsx` | `typescript` |
+| `.js`, `.jsx`, `.mjs`, `.cjs` | `javascript` |
+| `.py` | `python` |
+| `.rb` | `ruby` |
+| `.go` | `go` |
+| `.rs` | `rust` |
+| `.java` | `java` |
+| `.kt` | `kotlin` |
+| `.swift` | `swift` |
+| `.c`, `.h` | `c` |
+| `.cpp`, `.hpp` | `cpp` |
+| `.cs` | `csharp` |
+| `.php` | `php` |
+| `.lua` | `lua` |
+| `.sh`, `.bash`, `.zsh` | `shell` |
+| `.json` | `json` |
+| `.yaml`, `.yml` | `yaml` |
+| `.toml` | `toml` |
+| `.xml` | `xml` |
+| `.html` | `html` |
+| `.css` | `css` |
+| `.scss` | `scss` |
+| `.less` | `less` |
+| `.md` | `markdown` |
+| `.sql` | `sql` |
+
+Files with unrecognized extensions are still added but do not contribute to the `languages` list.
+
+---
+
+## Usage example
+
+```typescript
+import { GraphBuilder } from '@understand-anything/core';
+import type { StructuralAnalysis } from '@understand-anything/core';
+
+const builder = new GraphBuilder('my-project', 'abc1234');
+
+// Add a file with structural analysis
+const analysis: StructuralAnalysis = {
+  functions: [
+    { name: 'validateToken', lineRange: [12, 34], params: ['token'], returnType: 'boolean' },
+  ],
+  classes: [],
+  imports: [{ source: 'jsonwebtoken', specifiers: ['verify'], lineNumber: 1 }],
+  exports: [{ name: 'validateToken', lineNumber: 12 }],
+};
+
+builder.addFileWithAnalysis('src/auth.ts', analysis, {
+  fileSummary: 'Handles JWT authentication.',
+  summaries: {
+    validateToken: 'Verifies a JWT token and returns whether it is valid.',
+  },
+  tags: ['auth', 'jwt', 'security'],
+  complexity: 'simple',
+});
+
+// Add a lightweight file node
+builder.addFile('src/config.ts', {
+  summary: 'Application configuration constants.',
+  tags: ['config'],
+  complexity: 'simple',
+});
+
+// Add import relationship
+builder.addImportEdge('src/server.ts', 'src/auth.ts');
+
+// Add call relationship
+builder.addCallEdge('src/routes/login.ts', 'handleLogin', 'src/auth.ts', 'validateToken');
+
+// Build the final graph
+const graph = builder.build();
+// graph.nodes.length === 3  (file:src/auth.ts, func:src/auth.ts:validateToken, file:src/config.ts)
+// graph.edges.length === 3  (contains, imports, calls)
+// graph.project.languages  === ['typescript']
+```

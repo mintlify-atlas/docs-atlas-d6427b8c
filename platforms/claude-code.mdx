@@ -1,0 +1,76 @@
+---
+title: Claude Code
+description: Install Understand Anything on Claude Code — the native platform with full plugin marketplace support.
+---
+
+## Overview
+
+Claude Code is the **native platform** for Understand Anything. The plugin is published directly to the Claude Code plugin marketplace, so installation is a two-command process with no manual file management required.
+
+<Info>
+  Understand Anything v1.1.1 is available on the Claude Code marketplace under `Lum1104/Understand-Anything`.
+</Info>
+
+## Prerequisites
+
+- Claude Code installed and authenticated
+- A project directory open in Claude Code
+
+## Installation
+
+<Steps>
+  <Step title="Add the plugin from the marketplace">
+    Run the following command inside Claude Code:
+
+    ```bash
+    /plugin marketplace add Lum1104/Understand-Anything
+    ```
+
+    This fetches the plugin manifest from the marketplace and stages it for installation.
+  </Step>
+
+  <Step title="Install the plugin">
+    ```bash
+    /plugin install understand-anything
+    ```
+
+    Claude Code downloads the plugin package and registers all skills and agents.
+  </Step>
+</Steps>
+
+## Verification
+
+After installation, confirm the plugin is active by listing available plugins:
+
+```bash
+/plugin list
+```
+
+You should see `understand-anything` in the output. All of the following skills should now be available:
+
+- `/understand`
+- `/understand-dashboard`
+- `/understand-chat`
+- `/understand-diff`
+- `/understand-explain`
+- `/understand-onboard`
+
+## First Use
+
+Open a project and run:
+
+```bash
+/understand
+```
+
+The multi-agent pipeline scans your project, extracts every file, function, class, and dependency, then builds a knowledge graph saved to `.understand-anything/knowledge-graph.json`. When complete, the interactive dashboard opens automatically.
+
+<Tip>
+  After the initial scan, subsequent runs are incremental — only files that changed since the last run are re-analyzed.
+</Tip>
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

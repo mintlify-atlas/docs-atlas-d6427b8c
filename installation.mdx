@@ -1,0 +1,227 @@
+---
+title: "Installation"
+description: "Install Understand Anything on Claude Code, Codex, OpenCode, Cursor, OpenClaw, or Antigravity."
+---
+
+# Installation
+
+Understand Anything works across all major AI coding platforms. Choose your platform below.
+
+## Platform compatibility
+
+| Platform | Status | Install method |
+|----------|--------|----------------|
+| Claude Code | Native | Plugin marketplace |
+| Codex | Supported | AI-driven install |
+| OpenCode | Supported | Plugin config (`opencode.json`) |
+| OpenClaw | Supported | AI-driven install |
+| Cursor | Supported | Auto-discovery (clone repo) |
+| Antigravity | Supported | AI-driven install |
+
+<Tabs>
+  <Tab title="Claude Code">
+    Claude Code has native plugin support. Install directly from the marketplace:
+
+    <Steps>
+      <Step title="Add from marketplace">
+        ```bash
+        /plugin marketplace add Lum1104/Understand-Anything
+        ```
+      </Step>
+      <Step title="Install the plugin">
+        ```bash
+        /plugin install understand-anything
+        ```
+      </Step>
+      <Step title="Verify installation">
+        Run the analysis command in any project:
+
+        ```bash
+        /understand
+        ```
+
+        The multi-agent pipeline starts immediately.
+      </Step>
+    </Steps>
+
+    <Tip>
+      This is the native, fully supported platform. All six commands (`/understand`, `/understand-dashboard`, `/understand-chat`, `/understand-diff`, `/understand-explain`, `/understand-onboard`) are available out of the box.
+    </Tip>
+  </Tab>
+
+  <Tab title="OpenCode">
+    OpenCode uses a `opencode.json` plugin config file. The plugin auto-installs and registers all skills on startup.
+
+    <Steps>
+      <Step title="Add to opencode.json">
+        Add the plugin entry to your `opencode.json` (global or project-level):
+
+        ```json
+        {
+          "plugin": ["understand-anything@git+https://github.com/Lum1104/Understand-Anything.git"]
+        }
+        ```
+      </Step>
+      <Step title="Restart OpenCode">
+        Restart OpenCode. The plugin is automatically fetched from GitHub and all skills are registered.
+      </Step>
+      <Step title="Verify installation">
+        Ask OpenCode to list available skills. You should see `understand`, `understand-chat`, `understand-dashboard`, and more.
+
+        Then load the skill to analyze your codebase:
+
+        ```
+        use skill tool to load understand-anything/understand
+        ```
+
+        Or simply ask: `"Analyze this codebase and build a knowledge graph"`
+      </Step>
+    </Steps>
+
+    **Pinning a specific version:**
+
+    ```json
+    {
+      "plugin": ["understand-anything@git+https://github.com/Lum1104/Understand-Anything.git#v1.1.1"]
+    }
+    ```
+
+    **Updating:** Restart OpenCode — the plugin re-installs from git automatically.
+
+    **Uninstalling:** Remove the plugin line from `opencode.json` and restart.
+
+    <Note>
+      When OpenCode skills reference Claude Code-specific tools, the mapping is: `TodoWrite` → `todowrite`, `Task` with subagents → `@mention` syntax, `Skill` tool → OpenCode's native `skill` tool.
+    </Note>
+  </Tab>
+
+  <Tab title="Codex">
+    Codex uses an AI-driven install process. No config file edits are required.
+
+    <Steps>
+      <Step title="Trigger the install">
+        Tell Codex:
+
+        ```
+        Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.codex/INSTALL.md
+        ```
+
+        Codex fetches the install instructions and sets up the plugin automatically.
+      </Step>
+      <Step title="Analyze your codebase">
+        Once installed, run:
+
+        ```bash
+        /understand
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Cursor">
+    Cursor auto-discovers the plugin via the `.cursor-plugin/plugin.json` manifest when the repository is cloned locally.
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/Lum1104/Understand-Anything.git
+        ```
+      </Step>
+      <Step title="Open in Cursor">
+        Open the cloned repository in Cursor. The plugin is auto-discovered from `.cursor-plugin/plugin.json` — no manual installation is needed.
+      </Step>
+      <Step title="Run in your project">
+        Use Cursor's command interface to run:
+
+        ```bash
+        /understand
+        ```
+      </Step>
+    </Steps>
+
+    <Info>
+      Cursor's auto-discovery means you do not need to run any install commands. Opening the repo in Cursor is sufficient.
+    </Info>
+  </Tab>
+
+  <Tab title="OpenClaw">
+    OpenClaw uses an AI-driven install process, similar to Codex.
+
+    <Steps>
+      <Step title="Trigger the install">
+        Tell OpenClaw:
+
+        ```
+        Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.openclaw/INSTALL.md
+        ```
+
+        OpenClaw fetches the install instructions and sets up the plugin.
+      </Step>
+      <Step title="Analyze your codebase">
+        Once installed, run:
+
+        ```bash
+        /understand
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Antigravity">
+    Antigravity uses an AI-driven install process.
+
+    <Steps>
+      <Step title="Trigger the install">
+        Tell Antigravity:
+
+        ```
+        Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.antigravity/INSTALL.md
+        ```
+
+        Antigravity fetches the install instructions and configures the plugin.
+      </Step>
+      <Step title="Analyze your codebase">
+        Once installed, run:
+
+        ```bash
+        /understand
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+### Skills not found after install (OpenCode)
+
+1. Verify the plugin line exists in your `opencode.json`
+2. Check that `~/.cache/opencode/node_modules/understand-anything` was created after restart
+3. Use the `skill` tool to list discovered skills
+
+### Analysis stops at >200 files
+
+For very large projects, the pipeline prompts for confirmation before proceeding. You can also scope the analysis to a subdirectory:
+
+```bash
+/understand src/
+```
+
+### Force a full rebuild
+
+If the graph appears stale or incomplete, force a full rebuild:
+
+```bash
+/understand --full
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Run your first analysis and explore the dashboard.
+  </Card>
+  <Card title="Introduction" icon="book" href="/introduction">
+    Learn about the knowledge graph, multi-agent pipeline, and all available commands.
+  </Card>
+</CardGroup>

@@ -1,0 +1,138 @@
+---
+title: context-builder
+description: Build and format a ChatContext from a KnowledgeGraph for LLM-powered chat.
+---
+
+The `context-builder` module turns a [`KnowledgeGraph`](/api/plugins/analyzer-plugin#knowledgegraph) and a natural-language query into a focused `ChatContext` — a subset of the graph most relevant to that query — and formats it as structured markdown ready for an LLM prompt.
+
+## ChatContext
+
+The data structure returned by `buildChatContext`.
+
+```typescript
+export interface ChatContext {
+  projectName: string;
+  projectDescription: string;
+  languages: string[];
+  frameworks: string[];
+  relevantNodes: GraphNode[];
+  relevantEdges: GraphEdge[];
+  relevantLayers: Layer[];
+  query: string;
+}
+```
+
+<ResponseField name="projectName" type="string" required>
+  The name of the analyzed project, taken from `graph.project.name`.
+</ResponseField>
+
+<ResponseField name="projectDescription" type="string" required>
+  Human-readable description of the project, taken from `graph.project.description`.
+</ResponseField>
+
+<ResponseField name="languages" type="string[]" required>
+  Programming languages detected in the project.
+</ResponseField>
+
+<ResponseField name="frameworks" type="string[]" required>
+  Frameworks and major libraries detected in the project.
+</ResponseField>
+
+<ResponseField name="relevantNodes" type="GraphNode[]" required>
+  Nodes from the knowledge graph that match the query, plus their 1-hop neighbors via edges.
+</ResponseField>
+
+<ResponseField name="relevantEdges" type="GraphEdge[]" required>
+  Edges where **both** endpoints are in the relevant node set.
+</ResponseField>
+
+<ResponseField name="relevantLayers" type="Layer[]" required>
+  Architectural layers that contain at least one relevant node.
+</ResponseField>
+
+<ResponseField name="query" type="string" required>
+  The original user query passed to `buildChatContext`.
+</ResponseField>
+
+---
+
+## buildChatContext
+
+Searches the knowledge graph for nodes relevant to the user query, expands 1 hop via edges, and collects the associated layers.
+
+```typescript
+export function buildChatContext(
+  graph: KnowledgeGraph,
+  query: string,
+  maxNodes?: number,
+): ChatContext
+```
+
+<ParamField path="graph" type="KnowledgeGraph" required>
+  The full knowledge graph produced by the analysis pipeline.
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  Natural-language query string used to search for relevant nodes (e.g. `"authentication flow"`).
+</ParamField>
+
+<ParamField path="maxNodes" type="number">
+  Maximum number of nodes to retrieve from the search engine before 1-hop expansion. Defaults to `15`.
+</ParamField>
+
+### How it works
+
+1. **Search** — A `SearchEngine` is instantiated with `graph.nodes`. It runs `engine.search(query, { limit })` to produce ranked results.
+2. **1-hop expansion** — Every edge in `graph.edges` is inspected. If either endpoint is in the matched set, the other endpoint is added to the expanded set.
+3. **Edge collection** — Only edges where **both** endpoints are in the expanded set are included in `relevantEdges`.
+4. **Layer collection** — A layer is included if any of its `nodeIds` appear in the expanded set.
+
+```typescript
+// Example
+import { buildChatContext } from "./context-builder";
+import { loadGraph } from "@understand-anything/core";
+
+const graph = await loadGraph(".understand-anything/graph.json");
+const context = buildChatContext(graph, "How does authentication work?", 20);
+
+console.log(context.relevantNodes.length);  // nodes found + 1-hop neighbors
+console.log(context.relevantLayers.map(l => l.name));
+```
+
+---
+
+## formatContextForPrompt
+
+Formats a `ChatContext` as a multi-section markdown string ready to be injected into an LLM system prompt.
+
+```typescript
+export function formatContextForPrompt(context: ChatContext): string
+```
+
+<ParamField path="context" type="ChatContext" required>
+  A `ChatContext` produced by `buildChatContext`.
+</ParamField>
+
+### Output structure
+
+The returned string contains the following sections (only non-empty sections are rendered):
+
+| Section | Content |
+|---|---|
+| `# Project: <name>` | Project name, description, languages, frameworks |
+| `## Relevant Layers` | One `###` heading per layer with its description |
+| `## Code Components` | One `###` heading per node with file, complexity, summary, tags, language notes |
+| `## Relationships` | `source --[type]--> target` lines for each relevant edge |
+
+```typescript
+import { buildChatContext, formatContextForPrompt } from "./context-builder";
+
+const context = buildChatContext(graph, "session management");
+const prompt = formatContextForPrompt(context);
+
+// Inject into LLM call
+const response = await llm.chat([
+  { role: "system", content: prompt },
+  { role: "user", content: context.query },
+]);
+```

@@ -1,0 +1,72 @@
+---
+title: "Dashboard overview"
+description: "The Understand Anything dashboard is an interactive web UI that visualizes your knowledge graph and lets you explore, search, and learn about your codebase."
+---
+
+Run `/understand-dashboard` to open the dashboard after analyzing your project. If you run `/understand` for the first time, the dashboard opens automatically when analysis completes.
+
+## Layout
+
+The dashboard uses a graph-first layout split into two areas:
+
+- **Graph area** (75% of the viewport) — the interactive React Flow canvas showing your knowledge graph
+- **Right sidebar** (360px fixed width) — contextual panels that change based on what you're doing
+
+Above the graph, a persistent **search bar** and a **header** give you access to personas, layer grouping, and diff analysis from anywhere in the dashboard.
+
+## Key components
+
+<CardGroup cols={2}>
+  <Card title="Graph view" icon="diagram-project" href="/dashboard/graph-view">
+    The main canvas. Nodes represent files, functions, classes, modules, and concepts. Edges show relationships between them.
+  </Card>
+  <Card title="Search" icon="magnifying-glass" href="/dashboard/search">
+    Fuzzy search across node names, summaries, tags, and language notes. Results highlight matching nodes in the graph.
+  </Card>
+  <Card title="Personas" icon="users" href="/dashboard/personas">
+    Switch between Overview, Learn, and Deep Dive modes to adjust the level of detail shown in the graph and sidebar.
+  </Card>
+  <Card title="Guided tours" icon="map" href="/dashboard/guided-tours">
+    Auto-generated walkthroughs of the architecture. Each step highlights relevant nodes and explains what they do.
+  </Card>
+</CardGroup>
+
+## Sidebar panels
+
+The right sidebar shows one of three panels depending on your current state:
+
+| Condition | Panel shown |
+|-----------|-------------|
+| No node selected (default) | **ProjectOverview** — project name, stats, languages, frameworks, and a button to start the guided tour |
+| A node is selected | **NodeInfo** — node type, complexity, summary, file path, language concepts, tags, and connections |
+| Learn persona is active | **LearnPanel** — guided tour steps with navigation, language lessons, and referenced component pills |
+
+## Loading a knowledge graph
+
+<Steps>
+  <Step title="Run the analysis">
+    In your project directory, run `/understand`. The multi-agent pipeline scans your codebase and writes the result to `.understand-anything/knowledge-graph.json`.
+  </Step>
+  <Step title="Open the dashboard">
+    Run `/understand-dashboard`. The dashboard server starts and the UI fetches `knowledge-graph.json` automatically.
+  </Step>
+  <Step title="Explore">
+    The graph renders with Dagre auto-layout. All nodes and edges are immediately interactive.
+  </Step>
+</Steps>
+
+## Schema validation
+
+When the dashboard loads, it validates the knowledge graph JSON against the core schema using Zod. If validation fails, a red error banner appears at the top of the page with the specific validation errors. The graph will not render until a valid file is provided.
+
+<Warning>
+  If you see a schema validation error, the most common cause is a partially written `knowledge-graph.json` from an interrupted analysis run. Re-run `/understand` to regenerate the file.
+</Warning>
+
+## Diff overlay
+
+If a `diff-overlay.json` file is present alongside `knowledge-graph.json`, the dashboard loads it automatically. Use the **Diff** toggle in the header to show which nodes were changed by your current edits and which nodes are transitively affected. See [graph view](/dashboard/graph-view) for details.
+
+## Design
+
+The dashboard uses a dark luxury theme: deep black backgrounds (`#0a0a0a`), gold and amber accents (`#d4a574`), and DM Serif Display typography. It is built with React 18, React Flow, Zustand, TailwindCSS v4, and Vite.

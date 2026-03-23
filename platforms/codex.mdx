@@ -1,0 +1,101 @@
+---
+title: Codex
+description: Install Understand Anything on Codex using an AI-driven installation flow.
+---
+
+## Overview
+
+Codex is a **supported platform** for Understand Anything. Installation is handled via an AI-driven flow: you instruct Codex to fetch and execute the installation instructions directly from the repository.
+
+## Prerequisites
+
+- Codex installed
+- Git installed and available on your `PATH`
+
+## Installation
+
+<Steps>
+  <Step title="Trigger the AI-driven install">
+    Open Codex and send the following message:
+
+    ```
+    Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.codex/INSTALL.md
+    ```
+
+    Codex will fetch the install guide and execute the steps on your behalf.
+  </Step>
+
+  <Step title="What Codex does for you">
+    The instructions tell Codex to:
+
+    1. Clone the repository to `~/.codex/understand-anything`:
+       ```bash
+       git clone https://github.com/Lum1104/Understand-Anything.git ~/.codex/understand-anything
+       ```
+
+    2. Create the skills symlink so Codex can discover them:
+       ```bash
+       mkdir -p ~/.agents/skills
+       ln -s ~/.codex/understand-anything/understand-anything-plugin/skills ~/.agents/skills/understand-anything
+       ```
+
+       <Note>
+         On Windows (PowerShell), the equivalent commands use `New-Item` and `mklink /J` instead of `ln -s`.
+       </Note>
+
+    3. Restart Codex to discover the newly linked skills.
+  </Step>
+
+  <Step title="Restart Codex">
+    Restart Codex so it picks up the new skills from `~/.agents/skills/understand-anything`.
+  </Step>
+</Steps>
+
+## Verification
+
+Confirm the symlink is in place:
+
+```bash
+ls -la ~/.agents/skills/understand-anything
+```
+
+You should see a symlink pointing to the plugin's `skills/` directory inside the cloned repo.
+
+## First Use
+
+Once the skills are discovered, invoke Understand Anything by telling Codex:
+
+```
+Analyze this codebase and build a knowledge graph
+```
+
+Or directly:
+
+```
+Help me understand this project's architecture
+```
+
+Skills also activate automatically when Codex detects relevant context.
+
+## Updating
+
+To pull the latest version:
+
+```bash
+cd ~/.codex/understand-anything && git pull
+```
+
+The symlink means skills update instantly — no restart needed.
+
+## Uninstalling
+
+```bash
+rm ~/.agents/skills/understand-anything
+rm -rf ~/.codex/understand-anything
+```
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

@@ -1,0 +1,92 @@
+---
+title: /understand-chat
+description: Ask natural-language questions about your codebase and get answers grounded in the knowledge graph — with references to real files, functions, and architectural layers.
+---
+
+The `/understand-chat` command lets you ask plain-English questions about your project. It searches the knowledge graph for nodes relevant to your query, expands to connected components one hop away, and uses that focused context to give a precise answer backed by actual code structure.
+
+Use it whenever you want to understand how something works, find which files are responsible for a feature, or trace a call chain — without manually searching the codebase.
+
+## Usage
+
+```bash
+/understand-chat <query>
+```
+
+The `<query>` is any natural-language question about the codebase.
+
+## How it works
+
+<Steps>
+  <Step title="Search the graph">
+    The query is run through the `SearchEngine` against all nodes in `knowledge-graph.json`. It uses fuzzy and semantic matching to find up to 15 nodes most relevant to your question.
+  </Step>
+
+  <Step title="Expand one hop">
+    For each matched node, all directly connected nodes (via any edge type) are collected. This pulls in callers, callees, importers, and related components automatically.
+  </Step>
+
+  <Step title="Collect layers">
+    Any architectural layers that contain a relevant node are included as context, so the answer can explain which part of the system is involved.
+  </Step>
+
+  <Step title="Generate the answer">
+    The assembled context — nodes, edges, and layers — is formatted and passed to the LLM with instructions to reference specific file paths, function names, and relationships in the response.
+  </Step>
+</Steps>
+
+<Note>
+  `/understand-chat` requires an up-to-date knowledge graph. Run `/understand` first if you haven't analyzed the project yet, or after significant code changes.
+</Note>
+
+## Output
+
+A markdown response that:
+
+- Explains the concept or feature in plain English
+- References specific files and functions by path
+- Identifies which architectural layers are involved
+- Traces relationships and call chains where relevant
+
+## Examples
+
+```bash
+# Understand a feature
+/understand-chat How does authentication work?
+
+# Trace a function's callers
+/understand-chat What calls the validateToken function?
+
+# Find files responsible for a concern
+/understand-chat Which files handle database connections?
+
+# Understand data flow
+/understand-chat How does a user request get from the API to the database?
+
+# Ask about architecture
+/understand-chat What is the Service layer responsible for?
+
+# Understand a pattern
+/understand-chat Where are middleware functions used and what do they do?
+```
+
+<Tip>
+  More specific queries produce better results. Instead of "how does login work?", try "how does the login function in src/auth validate a JWT token?".
+</Tip>
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="/understand" icon="magnifying-glass" href="/commands/understand">
+    Build or update the knowledge graph that chat queries draw from.
+  </Card>
+  <Card title="/understand-explain" icon="file-code" href="/commands/understand-explain">
+    Deep-dive into a specific file or function rather than a free-form question.
+  </Card>
+  <Card title="/understand-dashboard" icon="chart-network" href="/commands/understand-dashboard">
+    Explore the knowledge graph visually in the interactive dashboard.
+  </Card>
+  <Card title="/understand-diff" icon="code-compare" href="/commands/understand-diff">
+    Analyze the impact of current git changes on the graph.
+  </Card>
+</CardGroup>

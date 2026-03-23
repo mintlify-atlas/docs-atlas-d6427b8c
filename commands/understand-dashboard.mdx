@@ -1,0 +1,64 @@
+---
+title: /understand-dashboard
+description: Open the interactive web dashboard to explore the knowledge graph visually — browse nodes, search by name or meaning, and navigate architectural layers.
+---
+
+The `/understand-dashboard` command launches a local web dashboard that renders your knowledge graph as an interactive node graph. Every file, function, class, and their relationships are laid out visually, color-coded by architectural layer. Select any node to read its plain-English summary and see its connections.
+
+The dashboard is automatically opened after a successful `/understand` run. Use this command directly when you want to return to the dashboard without re-running the pipeline.
+
+<Note>
+  You must have a valid `.understand-anything/knowledge-graph.json` in your project root before opening the dashboard. Run `/understand` first if it doesn't exist yet.
+</Note>
+
+## Usage
+
+```bash
+/understand-dashboard
+```
+
+## What you can do in the dashboard
+
+- **Browse the graph** — Pan and zoom the full node graph. Each node is color-coded by architectural layer (API, Service, Data, UI, Utility).
+- **Select a node** — Click any node to open the detail sidebar showing its type, complexity, plain-English summary, and all relationships.
+- **Search** — Fuzzy and semantic search across all nodes. Type a name or describe what you're looking for (e.g., "database connection") to highlight matching nodes.
+- **Guided tour** — Step through the auto-generated learning tour in dependency order. Ideal for onboarding.
+- **Persona mode** — Switch between Junior Dev, Product Manager, and Power User views to adjust the level of detail shown.
+- **Layer legend** — Toggle architectural layers on and off to focus on specific parts of the system.
+
+## Output
+
+The dashboard opens in your default browser. It reads directly from `.understand-anything/knowledge-graph.json` — no server or database required.
+
+If the graph file fails schema validation on load, an error banner is shown at the top of the dashboard describing the issue. The graph may still be partially browsable.
+
+<Tip>
+  To refresh the dashboard with updated analysis, run `/understand` (incremental) or `/understand --full` (full rebuild) and then reopen the dashboard.
+</Tip>
+
+## Examples
+
+```bash
+# Open the dashboard after running /understand
+/understand-dashboard
+
+# Return to the dashboard at any time without re-analyzing
+/understand-dashboard
+```
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="/understand" icon="magnifying-glass" href="/commands/understand">
+    Run the multi-agent pipeline to build or update the knowledge graph.
+  </Card>
+  <Card title="/understand-chat" icon="message" href="/commands/understand-chat">
+    Ask questions about the codebase using the knowledge graph as context.
+  </Card>
+  <Card title="/understand-explain" icon="file-code" href="/commands/understand-explain">
+    Deep-dive into a specific file or function.
+  </Card>
+  <Card title="/understand-onboard" icon="graduation-cap" href="/commands/understand-onboard">
+    Generate a structured onboarding guide for new team members.
+  </Card>
+</CardGroup>

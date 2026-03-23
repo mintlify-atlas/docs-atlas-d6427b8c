@@ -1,0 +1,112 @@
+---
+title: /understand-diff
+description: Analyze the impact of your current git changes on the knowledge graph — see which components, layers, and relationships are affected before you commit.
+---
+
+The `/understand-diff` command maps your uncommitted or staged git changes to nodes in the knowledge graph, then traces a one-hop ripple to find every component that may be affected downstream. The result is a structured impact report with a risk assessment.
+
+Run it before code review, before merging a branch, or any time you want to understand the blast radius of your changes.
+
+## Usage
+
+```bash
+/understand-diff
+```
+
+No arguments required. The command reads the current `git diff` automatically.
+
+## How it works
+
+<Steps>
+  <Step title="Read git changes">
+    Collects the list of changed file paths from git. Both staged and unstaged changes are included.
+  </Step>
+
+  <Step title="Map files to graph nodes">
+    Each changed file is matched to a `file:` node in the knowledge graph by its path. Any functions or classes contained in those files (via `contains` edges) are also included as changed nodes.
+
+    Files that have no corresponding node in the graph are listed separately as **unmapped files** — these may be new files added since the last `/understand` run.
+  </Step>
+
+  <Step title="Find affected components">
+    All nodes connected to the changed nodes by any edge (1-hop neighbors) are collected as **affected components** — callers, importers, dependents, and related nodes.
+  </Step>
+
+  <Step title="Identify impacted layers">
+    Any architectural layer containing a changed or affected node is flagged.
+  </Step>
+
+  <Step title="Risk assessment">
+    The report summarizes risk based on:
+    - Whether any changed components are classified as **complex**
+    - Whether changes span **multiple architectural layers**
+    - Whether the **blast radius** (affected node count) is large
+    - Whether there are **unmapped files** that need a graph update
+  </Step>
+</Steps>
+
+## Output
+
+A structured markdown report with these sections:
+
+```
+# Diff Analysis: <project-name>
+
+## Changed Components
+- AuthService (class) — Handles JWT issuance and validation
+  - File: `src/auth/auth.service.ts`
+  - Complexity: complex
+
+## Affected Components
+These components are connected to changed code and may need attention:
+- UserController (class) — REST endpoints for user management
+- TokenMiddleware (function) — Validates bearer tokens on incoming requests
+
+## Affected Layers
+- Service Layer: Business logic and orchestration
+- API Layer: HTTP route handlers and middleware
+
+## Impacted Relationships
+- UserController --[calls]--> AuthService
+- TokenMiddleware --[calls]--> AuthService
+
+## Risk Assessment
+- High complexity: 1 complex component(s) changed: AuthService
+- Cross-layer impact: Changes span 2 architectural layers
+```
+
+<Warning>
+  If your graph is out of date, unmapped files will appear in the report. Run `/understand` to include them in future diff analyses.
+</Warning>
+
+## Examples
+
+```bash
+# Check impact before opening a pull request
+/understand-diff
+
+# Use as part of a pre-commit review workflow
+git add src/payments/
+/understand-diff
+
+# After refactoring the auth module
+/understand-diff
+# Output highlights cross-layer impact spanning Service + API layers
+```
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="/understand" icon="magnifying-glass" href="/commands/understand">
+    Update the knowledge graph so diff analysis includes your latest files.
+  </Card>
+  <Card title="/understand-explain" icon="file-code" href="/commands/understand-explain">
+    Deep-dive into any component flagged in the diff report.
+  </Card>
+  <Card title="/understand-chat" icon="message" href="/commands/understand-chat">
+    Ask follow-up questions about the affected components.
+  </Card>
+  <Card title="/understand-dashboard" icon="chart-network" href="/commands/understand-dashboard">
+    Visualize the impacted nodes and layers in the interactive graph.
+  </Card>
+</CardGroup>

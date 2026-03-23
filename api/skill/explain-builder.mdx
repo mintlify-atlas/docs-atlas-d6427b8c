@@ -1,0 +1,144 @@
+---
+title: explain-builder
+description: Build a focused ExplainContext for a specific file or function and format it as an LLM prompt.
+---
+
+The `explain-builder` module locates a specific file or function in the knowledge graph and builds a rich `ExplainContext` containing the target node, its children, its 1-hop neighbors, and its architectural layer. It also generates a formatted prompt that instructs an LLM to produce a thorough explanation.
+
+## ExplainContext
+
+The data structure returned by `buildExplainContext`.
+
+```typescript
+export interface ExplainContext {
+  projectName: string;
+  path: string;
+  targetNode: GraphNode | null;
+  childNodes: GraphNode[];
+  connectedNodes: GraphNode[];
+  relevantEdges: GraphEdge[];
+  layer: Layer | null;
+}
+```
+
+<ResponseField name="projectName" type="string" required>
+  Name of the analyzed project.
+</ResponseField>
+
+<ResponseField name="path" type="string" required>
+  The original path string passed to `buildExplainContext` (e.g. `"src/auth.ts"` or `"src/auth.ts:login"`).
+</ResponseField>
+
+<ResponseField name="targetNode" type="GraphNode | null" required>
+  The node that matches the given path. `null` when no match is found in the graph.
+</ResponseField>
+
+<ResponseField name="childNodes" type="GraphNode[]" required>
+  Nodes contained by `targetNode` via edges of type `"contains"`. Empty when `targetNode` is `null`.
+</ResponseField>
+
+<ResponseField name="connectedNodes" type="GraphNode[]" required>
+  1-hop neighbors of `targetNode` and `childNodes` that are not themselves children or the target. Excludes self-references.
+</ResponseField>
+
+<ResponseField name="relevantEdges" type="GraphEdge[]" required>
+  All edges where at least one endpoint is `targetNode` or a child node.
+</ResponseField>
+
+<ResponseField name="layer" type="Layer | null" required>
+  The first architectural layer whose `nodeIds` contains `targetNode.id`. `null` if no layer matches.
+</ResponseField>
+
+---
+
+## buildExplainContext
+
+Builds a context for explaining a specific file or function.
+
+```typescript
+export function buildExplainContext(
+  graph: KnowledgeGraph,
+  path: string,
+): ExplainContext
+```
+
+<ParamField path="graph" type="KnowledgeGraph" required>
+  The full knowledge graph produced by the analysis pipeline.
+</ParamField>
+
+<ParamField path="path" type="string" required>
+  Target to explain. Supports two formats:
+
+  - **File path** — `"src/auth.ts"` matches any node whose `filePath` equals this string.
+  - **File + function** — `"src/auth.ts:login"` matches a node whose `filePath` is `"src/auth.ts"` and whose `name` is `"login"`.
+
+  URL-style strings containing `"://"` are never treated as `path:function` format.
+</ParamField>
+
+### How it works
+
+1. **Path parsing** — If the path contains `:` and no `://`, the part before the last `:` is treated as a file path and the part after is treated as a function name.
+2. **Node lookup** — First tries the `path:function` match. Falls back to matching only on `filePath` if no function match is found.
+3. **Child collection** — Nodes linked from `targetNode` by `"contains"` edges become `childNodes`.
+4. **1-hop neighbor collection** — All edges touching `targetNode` or any child node are collected. Endpoints not already in the target/child set become `connectedNodes`.
+5. **Layer lookup** — The first layer whose `nodeIds` includes `targetNode.id` is returned.
+
+```typescript
+import { buildExplainContext } from "./explain-builder";
+
+// Explain a whole file
+const fileCtx = buildExplainContext(graph, "src/auth/session.ts");
+
+// Explain a specific function inside a file
+const fnCtx = buildExplainContext(graph, "src/auth/session.ts:validateToken");
+
+console.log(fnCtx.targetNode?.name);        // "validateToken"
+console.log(fnCtx.childNodes.length);       // internal sub-functions
+console.log(fnCtx.connectedNodes.length);   // callers / callees
+console.log(fnCtx.layer?.name);             // e.g. "Authentication Layer"
+```
+
+When no matching node is found, `targetNode` is `null` and all array fields are empty.
+
+---
+
+## formatExplainPrompt
+
+Formats an `ExplainContext` as a structured prompt for LLM consumption.
+
+```typescript
+export function formatExplainPrompt(ctx: ExplainContext): string
+```
+
+<ParamField path="ctx" type="ExplainContext" required>
+  An `ExplainContext` produced by `buildExplainContext`.
+</ParamField>
+
+### Not-found output
+
+When `ctx.targetNode` is `null`, the function returns a friendly error message that explains why the path may not be in the graph and suggests running `/understand` first.
+
+### Found output structure
+
+When a target node is found, the returned string contains:
+
+| Section | Content |
+|---|---|
+| Header | Node name, type, complexity, file path, line range, summary |
+| `## Architectural Layer` | Layer name and description (omitted if no layer matched) |
+| `## Internal Components` | Child nodes with type and summary |
+| `## Connected Components` | 1-hop neighbors with type and summary |
+| `## Relationships` | `source --[type]--> target` lines (excludes `"contains"` edges) |
+| `## Language Notes` | Language-specific notes from the node (omitted if absent) |
+| `## Instructions` | Fixed 5-point prompt asking the LLM to explain the component |
+
+```typescript
+import { buildExplainContext, formatExplainPrompt } from "./explain-builder";
+
+const ctx = buildExplainContext(graph, "src/payments/stripe.ts:chargeCard");
+const prompt = formatExplainPrompt(ctx);
+
+const explanation = await llm.chat([
+  { role: "system", content: prompt },
+]);
+```

@@ -1,0 +1,106 @@
+---
+title: /understand-explain
+description: Deep-dive into a specific file or function — get a thorough explanation of what it does, how data flows through it, and how it connects to the rest of the codebase.
+---
+
+The `/understand-explain` command focuses the knowledge graph on a single file or function and produces a detailed explanation: what it does, why it exists, how data flows through it, which other components it interacts with, and any language patterns or design decisions worth noting.
+
+Use it when you need to truly understand a specific module before modifying it, during code review, or when onboarding to an unfamiliar part of the system.
+
+## Usage
+
+```bash
+# Explain a file
+/understand-explain <path>
+
+# Explain a specific function within a file
+/understand-explain <path>:<function-name>
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<path>` | Relative path to a source file (e.g. `src/auth/login.ts`) |
+| `<path>:<function-name>` | Path combined with a function or class name to target a specific node (e.g. `src/auth/login.ts:validateToken`) |
+
+## How it works
+
+<Steps>
+  <Step title="Locate the target node">
+    The path is matched against the knowledge graph. If a `path:name` format is provided, it first looks for a node with that exact file path and name. If not found, it falls back to matching by file path alone.
+  </Step>
+
+  <Step title="Collect child nodes">
+    All nodes contained inside the target (via `contains` edges) are gathered — for a file node this includes all its functions and classes; for a class node this includes its methods.
+  </Step>
+
+  <Step title="Find connected components">
+    All 1-hop neighbors of the target and its children are collected: importers, callees, dependencies, and related nodes. The full set of relevant edges is recorded.
+  </Step>
+
+  <Step title="Resolve architectural layer">
+    The layer that contains the target node is identified and included in the explanation.
+  </Step>
+
+  <Step title="Generate the deep-dive">
+    The assembled context is passed to the LLM with instructions to explain: what the component does, how data flows through it, how it interacts with connected components, any notable patterns or design decisions, and potential gotchas.
+  </Step>
+</Steps>
+
+## Output
+
+A structured explanation that covers:
+
+- **Type and complexity** — node type (file, function, class) and complexity rating
+- **Location** — file path and line range
+- **Plain-English summary** — what the component does and why it exists
+- **Architectural layer** — where it sits in the system
+- **Internal components** — child functions, methods, or classes
+- **Connected components** — callers, imports, dependencies with relationship types
+- **Relationships** — edge-level view of all connections (`calls`, `imports`, `depends_on`, etc.)
+- **Language notes** — programming patterns, idioms, or concepts present in the component
+
+<Note>
+  If the path is not found in the knowledge graph, the command will say so and suggest running `/understand` first or checking the exact file path.
+</Note>
+
+## Examples
+
+```bash
+# Explain an entire file
+/understand-explain src/auth/login.ts
+
+# Explain a specific function
+/understand-explain src/auth/login.ts:validateToken
+
+# Explain a class
+/understand-explain src/services/payment.service.ts:PaymentService
+
+# Explain a utility module
+/understand-explain src/utils/crypto.ts
+
+# Explain a React component
+/understand-explain src/components/UserProfile.tsx
+```
+
+<Tip>
+  Use `path:name` format to target a specific function when a file contains many components. This gives a tighter, more focused explanation than explaining the whole file.
+</Tip>
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="/understand-chat" icon="message" href="/commands/understand-chat">
+    Ask free-form questions about how components relate to each other.
+  </Card>
+  <Card title="/understand-diff" icon="code-compare" href="/commands/understand-diff">
+    See the blast radius when you modify this component.
+  </Card>
+  <Card title="/understand-dashboard" icon="chart-network" href="/commands/understand-dashboard">
+    Visualize the component and its connections in the interactive graph.
+  </Card>
+  <Card title="/understand" icon="magnifying-glass" href="/commands/understand">
+    Build or update the graph so new files are available for explanation.
+  </Card>
+</CardGroup>

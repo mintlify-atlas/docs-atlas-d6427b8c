@@ -1,0 +1,348 @@
+---
+title: Adding Language Support
+description: Step-by-step guide to adding support for a new programming language by implementing the AnalyzerPlugin interface and registering it with the PluginRegistry.
+---
+
+Understand Anything uses a plugin-based architecture so new languages can be
+added without modifying the core engine. This guide walks through adding full
+static-analysis support for a new programming language.
+
+## Core Interfaces
+
+You will implement against the following interfaces. All are exported from
+`packages/core/src/types.ts`.
+
+### `AnalyzerPlugin`
+
+The contract every language plugin must satisfy:
+
+```typescript
+export interface AnalyzerPlugin {
+  name: string;
+  languages: string[];
+  analyzeFile(filePath: string, content: string): StructuralAnalysis;
+  resolveImports(filePath: string, content: string): ImportResolution[];
+  extractCallGraph?(filePath: string, content: string): CallGraphEntry[];
+}
+```
+
+### `StructuralAnalysis`
+
+The result returned by `analyzeFile`:
+
+```typescript
+export interface StructuralAnalysis {
+  functions: Array<{
+    name: string;
+    lineRange: [number, number];
+    params: string[];
+    returnType?: string;
+  }>;
+  classes: Array<{
+    name: string;
+    lineRange: [number, number];
+    methods: string[];
+    properties: string[];
+  }>;
+  imports: Array<{ source: string; specifiers: string[]; lineNumber: number }>;
+  exports: Array<{ name: string; lineNumber: number }>;
+}
+```
+
+### `ImportResolution`
+
+The result returned by `resolveImports`:
+
+```typescript
+export interface ImportResolution {
+  source: string;        // The raw import string (e.g. "./utils" or "express")
+  resolvedPath: string;  // Absolute path or package name
+  specifiers: string[];  // Named imports / symbols
+}
+```
+
+### `CallGraphEntry`
+
+The result returned by the optional `extractCallGraph`:
+
+```typescript
+export interface CallGraphEntry {
+  caller: string;    // Name of the calling function
+  callee: string;    // Name (or expression) being called
+  lineNumber: number;
+}
+```
+
+---
+
+## Step-by-Step Guide
+
+<Steps>
+  <Step title="Install a tree-sitter grammar for the language">
+    The easiest path to a robust parser is to use an existing tree-sitter
+    grammar. Check the
+    [tree-sitter organization on GitHub](https://github.com/tree-sitter) or
+    npm for `tree-sitter-<language>` packages.
+
+    ```bash
+    # Example: adding Python support
+    pnpm --filter @understand-anything/core add tree-sitter-python
+    ```
+
+    <Note>
+      Understand Anything uses `web-tree-sitter` (WASM), not native
+      `tree-sitter` bindings. When you install a grammar package, you are
+      installing it for its `.wasm` artifact — not to call native C code
+      directly. Confirm the package ships a `.wasm` file under its package
+      directory.
+    </Note>
+
+    If no tree-sitter grammar exists for your language, you can write a
+    custom parser or use a regex-based approach inside `analyzeFile`.
+  </Step>
+
+  <Step title="Create the plugin file">
+    Create a new file in
+    `understand-anything-plugin/packages/core/src/plugins/`. Follow the naming
+    pattern `<language>-plugin.ts`.
+
+    ```typescript
+    // packages/core/src/plugins/python-plugin.ts
+    import { createRequire } from 'node:module';
+    import { dirname, resolve } from 'node:path';
+    import type {
+      AnalyzerPlugin,
+      StructuralAnalysis,
+      ImportResolution,
+      CallGraphEntry,
+    } from '../types.js';
+
+    const require = createRequire(import.meta.url);
+
+    type TreeSitterParser = import('web-tree-sitter').Parser;
+    type TreeSitterLanguage = import('web-tree-sitter').Language;
+
+    export class PythonPlugin implements AnalyzerPlugin {
+      readonly name = 'python';
+      readonly languages = ['python'];
+
+      private _ParserClass: (new () => TreeSitterParser) | null = null;
+      private _language: TreeSitterLanguage | null = null;
+      private _initialized = false;
+
+      async init(): Promise<void> {
+        if (this._initialized) return;
+
+        const mod = await import('web-tree-sitter');
+        const ParserCls = mod.Parser;
+        const LanguageCls = mod.Language;
+
+        await ParserCls.init();
+        this._ParserClass = ParserCls as unknown as new () => TreeSitterParser;
+
+        const wasmPath = require.resolve(
+          'tree-sitter-python/tree-sitter-python.wasm',
+        );
+        this._language = await LanguageCls.load(wasmPath);
+        this._initialized = true;
+      }
+
+      analyzeFile(filePath: string, content: string): StructuralAnalysis {
+        if (!this._initialized || !this._ParserClass || !this._language) {
+          throw new Error('PythonPlugin.init() must be called before use');
+        }
+
+        const parser = new this._ParserClass();
+        parser.setLanguage(this._language);
+        const tree = parser.parse(content);
+
+        if (!tree) {
+          parser.delete();
+          return { functions: [], classes: [], imports: [], exports: [] };
+        }
+
+        // Walk the AST and extract structural information.
+        // See TreeSitterPlugin for a reference traversal implementation.
+        const functions: StructuralAnalysis['functions'] = [];
+        const classes: StructuralAnalysis['classes'] = [];
+        const imports: StructuralAnalysis['imports'] = [];
+        const exports: StructuralAnalysis['exports'] = [];
+
+        // ... AST traversal logic ...
+
+        tree.delete();
+        parser.delete();
+
+        return { functions, classes, imports, exports };
+      }
+
+      resolveImports(filePath: string, content: string): ImportResolution[] {
+        const analysis = this.analyzeFile(filePath, content);
+        const dir = dirname(filePath);
+
+        return analysis.imports.map((imp) => {
+          const resolvedPath = imp.source.startsWith('.')
+            ? resolve(dir, imp.source)
+            : imp.source;
+          return {
+            source: imp.source,
+            resolvedPath,
+            specifiers: imp.specifiers,
+          };
+        });
+      }
+
+      // Optional: implement extractCallGraph for richer graph edges
+      extractCallGraph(filePath: string, content: string): CallGraphEntry[] {
+        return [];
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Understand the three analysis methods">
+    Each method has a distinct role in building the knowledge graph:
+
+    **`analyzeFile`** — structural extraction
+
+    Walk the AST and populate all four arrays in `StructuralAnalysis`:
+    - `functions` — every named function/method with its line range, parameter
+      names, and optional return type
+    - `classes` — every class with its line range, method names, and property
+      names
+    - `imports` — every import statement with its source module and imported
+      symbol names
+    - `exports` — every symbol exported from the file
+
+    **`resolveImports`** — path resolution
+
+    Convert raw import strings into usable paths:
+    - Relative imports (starting with `./` or `../`) should be resolved against
+      `dirname(filePath)` using `path.resolve`
+    - Package imports (e.g. `express`, `@myorg/utils`) are left as-is
+
+    **`extractCallGraph`** _(optional)_ — call relationships
+
+    Track which function calls which, keyed by function name and line number.
+    The `TreeSitterPlugin` implementation uses a function name stack: push when
+    entering a function-like node, pop when leaving, and emit an entry for every
+    `call_expression` encountered while a function name is on the stack.
+  </Step>
+
+  <Step title="Register the plugin with PluginRegistry">
+    Import your plugin wherever you create the `PluginRegistry` and register
+    it after initialization:
+
+    ```typescript
+    import { PluginRegistry } from '@understand-anything/core';
+    import { TreeSitterPlugin } from './plugins/tree-sitter-plugin.js';
+    import { PythonPlugin } from './plugins/python-plugin.js';
+
+    const registry = new PluginRegistry();
+
+    const tsPlugin = new TreeSitterPlugin();
+    await tsPlugin.init();
+    registry.register(tsPlugin);
+
+    const pythonPlugin = new PythonPlugin();
+    await pythonPlugin.init();
+    registry.register(pythonPlugin);
+    ```
+
+    After registration, the registry routes `.py` files to `PythonPlugin`
+    automatically via the built-in extension map:
+
+    ```typescript
+    // Works automatically — no extra configuration needed
+    const analysis = registry.analyzeFile('/src/main.py', content);
+    const imports = registry.resolveImports('/src/main.py', content);
+    ```
+
+    <Note>
+      The built-in `EXTENSION_TO_LANGUAGE` map in `registry.ts` already
+      includes common languages. If you are adding support for an extension
+      that is not listed (e.g. `.rb` for Ruby is listed; an obscure language
+      may not be), add an entry to that map inside
+      `packages/core/src/plugins/registry.ts`.
+    </Note>
+  </Step>
+
+  <Step title="Write tests for your plugin">
+    Place tests alongside the existing tests for `TreeSitterPlugin`. Use
+    Vitest and inline fixture strings to keep tests self-contained:
+
+    ```typescript
+    // packages/core/src/plugins/python-plugin.test.ts
+    import { describe, it, expect, beforeAll } from 'vitest';
+    import { PythonPlugin } from './python-plugin.js';
+
+    describe('PythonPlugin', () => {
+      let plugin: PythonPlugin;
+
+      beforeAll(async () => {
+        plugin = new PythonPlugin();
+        await plugin.init();
+      });
+
+      it('extracts functions', () => {
+        const result = plugin.analyzeFile(
+          '/src/example.py',
+          `def greet(name):\n    return f"Hello, {name}"\n`,
+        );
+        expect(result.functions).toHaveLength(1);
+        expect(result.functions[0].name).toBe('greet');
+        expect(result.functions[0].params).toEqual(['name']);
+      });
+
+      it('resolves relative imports', () => {
+        const result = plugin.resolveImports(
+          '/src/main.py',
+          `from .utils import helper\n`,
+        );
+        expect(result[0].source).toBe('.utils');
+        expect(result[0].specifiers).toContain('helper');
+      });
+    });
+    ```
+
+    Run your tests with:
+
+    ```bash
+    pnpm --filter @understand-anything/core test
+    ```
+  </Step>
+</Steps>
+
+## Reference: `TreeSitterPlugin`
+
+The built-in `TreeSitterPlugin` (`packages/core/src/plugins/tree-sitter-plugin.ts`)
+is the reference implementation to study when building your own plugin. Key
+patterns to follow:
+
+<CardGroup cols={2}>
+  <Card title="Async init pattern">
+    Load the WASM runtime and grammar files once in an `async init()` method.
+    All subsequent analysis methods are synchronous.
+  </Card>
+  <Card title="Parser lifecycle">
+    Create a new parser instance per call to `analyzeFile` or
+    `extractCallGraph`. Always call `tree.delete()` and `parser.delete()` when
+    done to free WASM memory.
+  </Card>
+  <Card title="AST traversal">
+    Use a recursive `traverse(node, visitor)` helper to walk every node in the
+    tree. Match on `node.type` strings to identify constructs.
+  </Card>
+  <Card title="Call graph stack">
+    Track a `functionStack: string[]` during traversal — push on entering a
+    function-like node, pop on leaving. Emit a `CallGraphEntry` for every
+    `call_expression` when the stack is non-empty.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Use the tree-sitter playground for your language's grammar
+  (`https://tree-sitter.github.io/tree-sitter/playground`) to explore the
+  AST node types before writing traversal code. It shows the exact `node.type`
+  strings you need to match.
+</Tip>

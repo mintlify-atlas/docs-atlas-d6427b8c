@@ -1,0 +1,285 @@
+---
+title: Search Engine
+description: Fuzzy and semantic search over knowledge graph nodes using Fuse.js and cosine-similarity vector embeddings.
+---
+
+The core package ships two complementary search engines:
+
+- **`SearchEngine`** — fuzzy text search via [Fuse.js](https://fusejs.io/). No server required, runs entirely in-memory.
+- **`SemanticSearchEngine`** — vector similarity search using pre-computed embeddings.
+
+Both are exported from the `@understand-anything/core/search` subpath (browser-safe) and from the main `@understand-anything/core` entry.
+
+```typescript
+import { SearchEngine, SemanticSearchEngine } from '@understand-anything/core/search';
+```
+
+---
+
+## SearchEngine
+
+Fuzzy full-text search over a collection of `GraphNode` objects.
+
+### Constructor
+
+```typescript
+constructor(nodes: GraphNode[])
+```
+
+<ParamField path="nodes" type="GraphNode[]" required>
+  Initial set of graph nodes to index. The Fuse.js index is built immediately on construction.
+</ParamField>
+
+### search()
+
+```typescript
+search(query: string, options?: SearchOptions): SearchResult[]
+```
+
+Searches the indexed nodes and returns ranked results. Returns an empty array when `query` is blank or whitespace-only.
+
+**How it works:**
+
+1. The query is trimmed.
+2. Space-separated tokens are joined with ` | ` (logical OR) to produce a Fuse.js [extended search](https://fusejs.io/api/options.html#useextendedsearch) expression — e.g. `"auth contrl"` becomes `"auth | contrl"`. This means a node matches if it contains _any_ of the tokens, making the search tolerant of typos across separate words.
+3. Results are filtered by `options.types` if provided, then sliced to `options.limit`.
+
+<ParamField path="query" type="string" required>
+  Search query string. Multi-word queries match nodes that contain any of the words (OR semantics).
+</ParamField>
+
+<ParamField path="options" type="SearchOptions">
+  Optional search configuration.
+
+  <Expandable title="SearchOptions fields">
+    <ParamField path="types" type="GraphNode['type'][]">
+      Filter results to only nodes of the given types. Accepts any combination of `"file"`, `"function"`, `"class"`, `"module"`, `"concept"`. When omitted all types are returned.
+    </ParamField>
+    <ParamField path="limit" type="number">
+      Maximum number of results to return. Defaults to `50`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns** `SearchResult[]`
+
+<ResponseField name="nodeId" type="string" required>
+  The `id` of the matching `GraphNode`.
+</ResponseField>
+
+<ResponseField name="score" type="number" required>
+  Fuse.js match score. `0` is a perfect match, `1` is the worst possible match. Results are returned in ascending score order (best first).
+</ResponseField>
+
+### updateNodes()
+
+```typescript
+updateNodes(nodes: GraphNode[]): void
+```
+
+Replaces the indexed node collection and rebuilds the Fuse.js index. Use this after the knowledge graph is reloaded or updated.
+
+<ParamField path="nodes" type="GraphNode[]" required>
+  New complete set of nodes to index.
+</ParamField>
+
+---
+
+## Fuse.js Configuration
+
+The Fuse.js instance is configured with the following options, applied consistently across all `SearchEngine` instances:
+
+| Option | Value | Effect |
+|---|---|---|
+| `threshold` | `0.4` | Controls fuzziness. Lower = stricter. `0.4` allows moderate typos. |
+| `ignoreLocation` | `true` | Matches anywhere in the string, not just near the start. |
+| `useExtendedSearch` | `true` | Enables the `|` OR operator in query strings. |
+| `includeScore` | `true` | Populates `score` on each result. |
+
+**Field weights:**
+
+| Field | Weight | Rationale |
+|---|---|---|
+| `name` | `0.4` | Symbol names are the most direct match signal |
+| `tags` | `0.3` | Keyword tags boost topical relevance |
+| `summary` | `0.2` | Prose description provides broader coverage |
+| `languageNotes` | `0.1` | Language idiom notes contribute marginally |
+
+---
+
+## SearchResult
+
+```typescript
+export interface SearchResult {
+  nodeId: string;
+  score: number; // 0 = perfect match, 1 = worst match
+}
+```
+
+Returned by both `SearchEngine.search()` and `SemanticSearchEngine.search()`.
+
+---
+
+## SearchOptions
+
+```typescript
+export interface SearchOptions {
+  types?: GraphNode["type"][];
+  limit?: number;
+}
+```
+
+Used exclusively by `SearchEngine.search()`.
+
+---
+
+## Usage example
+
+```typescript
+import { SearchEngine } from '@understand-anything/core/search';
+import type { GraphNode } from '@understand-anything/core/types';
+
+const nodes: GraphNode[] = graph.nodes;
+const engine = new SearchEngine(nodes);
+
+// Search all node types
+const results = engine.search('auth middleware');
+// results[0].score === 0   → perfect match
+// results[0].nodeId        → e.g. 'func:src/middleware/auth.ts:verifyJwt'
+
+// Search only function nodes, limit to 10
+const fnResults = engine.search('validate', { types: ['function'], limit: 10 });
+
+// Rebuild index after graph reload
+engine.updateNodes(updatedGraph.nodes);
+```
+
+---
+
+## SemanticSearchEngine
+
+Vector similarity search using pre-computed embeddings. Complements `SearchEngine` when embedding data is available.
+
+```typescript
+import { SemanticSearchEngine } from '@understand-anything/core/search';
+```
+
+### Constructor
+
+```typescript
+constructor(nodes: GraphNode[], embeddings: Record<string, number[]>)
+```
+
+<ParamField path="nodes" type="GraphNode[]" required>
+  The graph nodes to search over.
+</ParamField>
+
+<ParamField path="embeddings" type="Record<string, number[]>" required>
+  Pre-computed embedding vectors keyed by `GraphNode.id`. Nodes without a corresponding embedding are skipped during search.
+</ParamField>
+
+### search()
+
+```typescript
+search(queryEmbedding: number[], options?: SemanticSearchOptions): SearchResult[]
+```
+
+Ranks nodes by cosine similarity to the query embedding. Results are returned in ascending `score` order (best first), where `score = 1 - cosineSimilarity` so that `0` still means a perfect match, consistent with `SearchResult`.
+
+<ParamField path="queryEmbedding" type="number[]" required>
+  Embedding vector for the query, produced by the same model used to embed the nodes.
+</ParamField>
+
+<ParamField path="options" type="SemanticSearchOptions">
+  Optional search configuration.
+
+  <Expandable title="SemanticSearchOptions fields">
+    <ParamField path="limit" type="number">
+      Maximum number of results to return. Defaults to `10`.
+    </ParamField>
+    <ParamField path="threshold" type="number">
+      Minimum cosine similarity score `[0, 1]` required for a node to appear in results. Defaults to `0` (no filtering).
+    </ParamField>
+    <ParamField path="types" type="string[]">
+      Filter results to nodes whose `type` is in this list.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns** `SearchResult[]` — same shape as `SearchEngine.search()`.
+
+### hasEmbeddings()
+
+```typescript
+hasEmbeddings(): boolean
+```
+
+Returns `true` if any embeddings have been stored. Use this to decide whether to fall back to fuzzy search.
+
+### addEmbedding()
+
+```typescript
+addEmbedding(nodeId: string, embedding: number[]): void
+```
+
+Adds or replaces the embedding for a single node. Useful for incrementally updating embeddings without rebuilding the entire engine.
+
+<ParamField path="nodeId" type="string" required>
+  The `GraphNode.id` to associate the embedding with.
+</ParamField>
+
+<ParamField path="embedding" type="number[]" required>
+  The embedding vector.
+</ParamField>
+
+### updateNodes()
+
+```typescript
+updateNodes(nodes: GraphNode[]): void
+```
+
+Replaces the node list. Existing embeddings are preserved.
+
+<ParamField path="nodes" type="GraphNode[]" required>
+  New complete set of nodes.
+</ParamField>
+
+---
+
+## cosineSimilarity()
+
+Utility function exported alongside the search engines.
+
+```typescript
+export function cosineSimilarity(a: number[], b: number[]): number
+```
+
+Computes the cosine similarity between two equal-length vectors. Returns `0` if either vector has zero magnitude.
+
+```typescript
+import { cosineSimilarity } from '@understand-anything/core/search';
+
+const sim = cosineSimilarity([1, 0, 0], [1, 0, 0]); // 1.0
+const sim2 = cosineSimilarity([1, 0, 0], [0, 1, 0]); // 0.0
+```
+
+---
+
+## SemanticSearchEngine usage example
+
+```typescript
+import { SemanticSearchEngine } from '@understand-anything/core/search';
+
+// embeddings produced externally (e.g. OpenAI text-embedding-3-small)
+const embeddings: Record<string, number[]> = {
+  'file:src/auth.ts': [0.12, 0.98, ...],
+  'func:src/auth.ts:validateToken': [0.11, 0.97, ...],
+};
+
+const engine = new SemanticSearchEngine(graph.nodes, embeddings);
+
+if (engine.hasEmbeddings()) {
+  const queryVec = await embed('authentication middleware');
+  const results = engine.search(queryVec, { limit: 5, threshold: 0.7 });
+}
+```

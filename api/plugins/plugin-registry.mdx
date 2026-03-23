@@ -1,0 +1,216 @@
+---
+title: PluginRegistry
+description: Central registry that maps languages and file extensions to AnalyzerPlugin instances.
+---
+
+The `PluginRegistry` class is the single point of coordination for all language analysis plugins. It maps language identifiers and file extensions to [`AnalyzerPlugin`](/api/plugins/analyzer-plugin) instances, and provides a unified API for analyzing files without callers needing to know which plugin handles a given language.
+
+## Built-in extension mapping
+
+The registry ships with a built-in map from file extension to language identifier:
+
+| Extension(s) | Language |
+|---|---|
+| `.ts`, `.tsx` | `typescript` |
+| `.js`, `.jsx` | `javascript` |
+| `.py` | `python` |
+| `.go` | `go` |
+| `.rs` | `rust` |
+| `.rb` | `ruby` |
+| `.java` | `java` |
+| `.kt` | `kotlin` |
+| `.cs` | `csharp` |
+| `.cpp` | `cpp` |
+| `.c` | `c` |
+| `.swift` | `swift` |
+| `.php` | `php` |
+
+Plugins must declare the language identifiers they support (e.g. `["typescript", "javascript"]`) in their `languages` property. The registry links file extensions to plugins through these identifiers.
+
+---
+
+## Class: PluginRegistry
+
+```typescript
+export class PluginRegistry {
+  register(plugin: AnalyzerPlugin): void;
+  unregister(name: string): void;
+  getPluginForLanguage(language: string): AnalyzerPlugin | null;
+  getPluginForFile(filePath: string): AnalyzerPlugin | null;
+  analyzeFile(filePath: string, content: string): StructuralAnalysis | null;
+  resolveImports(filePath: string, content: string): ImportResolution[] | null;
+  getPlugins(): AnalyzerPlugin[];
+  getSupportedLanguages(): string[];
+}
+```
+
+---
+
+## register
+
+Adds a plugin to the registry and maps all of its declared languages to it.
+
+```typescript
+register(plugin: AnalyzerPlugin): void
+```
+
+<ParamField path="plugin" type="AnalyzerPlugin" required>
+  The plugin instance to register. Every language in `plugin.languages` is mapped to this plugin, overwriting any previous registration for that language.
+</ParamField>
+
+```typescript
+import { PluginRegistry } from "@understand-anything/core";
+import { TreeSitterPlugin } from "@understand-anything/core";
+
+const registry = new PluginRegistry();
+const tsPlugin = new TreeSitterPlugin();
+await tsPlugin.init();
+
+registry.register(tsPlugin);
+// "typescript" and "javascript" are now mapped to tsPlugin
+```
+
+---
+
+## unregister
+
+Removes a plugin by name and rebuilds the internal language map.
+
+```typescript
+unregister(name: string): void
+```
+
+<ParamField path="name" type="string" required>
+  The `plugin.name` of the plugin to remove. If no plugin with that name is registered, the call is a no-op.
+</ParamField>
+
+After removal, languages that were exclusively served by the unregistered plugin will no longer resolve. Languages served by other remaining plugins are unaffected.
+
+---
+
+## getPluginForLanguage
+
+Returns the plugin registered for a given language identifier.
+
+```typescript
+getPluginForLanguage(language: string): AnalyzerPlugin | null
+```
+
+<ParamField path="language" type="string" required>
+  A language identifier (e.g. `"typescript"`, `"python"`).
+</ParamField>
+
+Returns `null` if no plugin is registered for the language.
+
+---
+
+## getPluginForFile
+
+Returns the plugin that handles the given file, based on its extension.
+
+```typescript
+getPluginForFile(filePath: string): AnalyzerPlugin | null
+```
+
+<ParamField path="filePath" type="string" required>
+  Any file path. The extension is extracted, lowercased, and looked up in the built-in extension map.
+</ParamField>
+
+Returns `null` when the extension is unknown or no plugin is registered for the mapped language.
+
+---
+
+## analyzeFile
+
+Finds the appropriate plugin for `filePath` and delegates to its `analyzeFile` method.
+
+```typescript
+analyzeFile(filePath: string, content: string): StructuralAnalysis | null
+```
+
+<ParamField path="filePath" type="string" required>
+  Path to the file being analyzed. Used only for extension/language resolution.
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Full source code of the file as a string.
+</ParamField>
+
+Returns `null` if no plugin handles the file type. Otherwise returns a [`StructuralAnalysis`](/api/plugins/analyzer-plugin#structuralanalysis).
+
+```typescript
+const analysis = registry.analyzeFile("src/auth.ts", sourceCode);
+if (analysis) {
+  console.log(analysis.functions.map(f => f.name));
+}
+```
+
+---
+
+## resolveImports
+
+Finds the appropriate plugin for `filePath` and delegates to its `resolveImports` method.
+
+```typescript
+resolveImports(filePath: string, content: string): ImportResolution[] | null
+```
+
+<ParamField path="filePath" type="string" required>
+  Path to the file. Used for extension/language resolution and for resolving relative import paths.
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Full source code of the file as a string.
+</ParamField>
+
+Returns `null` if no plugin handles the file type. Otherwise returns an array of [`ImportResolution`](/api/plugins/analyzer-plugin#importresolution).
+
+---
+
+## getPlugins
+
+Returns a shallow copy of all registered plugins.
+
+```typescript
+getPlugins(): AnalyzerPlugin[]
+```
+
+---
+
+## getSupportedLanguages
+
+Returns all language identifiers that currently have a registered plugin.
+
+```typescript
+getSupportedLanguages(): string[]
+```
+
+```typescript
+console.log(registry.getSupportedLanguages());
+// ["typescript", "javascript"]
+```
+
+---
+
+## Full usage example
+
+```typescript
+import { PluginRegistry } from "@understand-anything/core";
+import { TreeSitterPlugin } from "@understand-anything/core";
+import { readFileSync } from "node:fs";
+
+const registry = new PluginRegistry();
+
+const plugin = new TreeSitterPlugin();
+await plugin.init();
+registry.register(plugin);
+
+console.log(registry.getSupportedLanguages()); // ["typescript", "javascript"]
+
+const content = readFileSync("src/index.ts", "utf-8");
+const analysis = registry.analyzeFile("src/index.ts", content);
+const imports = registry.resolveImports("src/index.ts", content);
+
+console.log(analysis?.functions);
+console.log(imports);
+```

@@ -1,97 +1,89 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Understand Anything"
+description: "Turn any codebase into an interactive knowledge graph you can explore, search, and ask questions about."
 ---
 
-## Setting up
-
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Analyze your first codebase in under 2 minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Command Reference" icon="terminal" href="/commands/understand">
+    Every command, every flag, documented in full.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Platform Guides" icon="grid-2" href="/platforms/claude-code">
+    Install on Claude Code, Codex, OpenCode, Cursor, and more.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/core/knowledge-graph">
+    TypeScript types, classes, and functions from the core package.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What is Understand Anything?
 
-Everything you need to create world-class documentation.
+You just joined a new team. The codebase is 200,000 lines of code. Where do you even start?
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+**Understand Anything** is a multi-platform AI coding plugin that solves this. It combines LLM intelligence with static analysis to produce a living, explorable map of your project — with plain-English explanations for every file, function, class, and dependency.
 
-## Need inspiration?
+<Steps>
+  <Step title="Analyze your codebase">
+    Run `/understand` to launch a multi-agent pipeline that scans every file, extracts structure, and builds a knowledge graph saved to `.understand-anything/knowledge-graph.json`.
+  </Step>
+  <Step title="Explore the dashboard">
+    Run `/understand-dashboard` to open an interactive web UI — your codebase visualized as a color-coded graph, searchable and clickable.
+  </Step>
+  <Step title="Ask questions">
+    Use `/understand-chat`, `/understand-diff`, `/understand-explain`, and `/understand-onboard` to get deep answers grounded in the real code.
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Who is it for?
+
+<CardGroup cols={3}>
+  <Card title="Junior Developers" icon="user-graduate">
+    Get guided tours that walk you through the architecture step by step, with every function and class explained in plain English. Stop drowning in unfamiliar code.
+  </Card>
+  <Card title="Product Managers" icon="briefcase">
+    Finally understand how the system actually works without reading code. Ask "how does authentication work?" and get clear answers grounded in the real codebase.
+  </Card>
+  <Card title="AI-Assisted Developers" icon="robot">
+    Give your AI tools deep context. Use `/understand-diff` before code review, `/understand-explain` to dive into any module, and `/understand-chat` to reason about architecture.
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Interactive Knowledge Graph" icon="diagram-project">
+    Files, functions, classes, and relationships visualized with React Flow. Click any node to see its code and connections.
+  </Card>
+  <Card title="Plain-English Summaries" icon="message-lines">
+    Every node described by an LLM so anyone — technical or not — can understand what it does and why it exists.
+  </Card>
+  <Card title="Guided Tours" icon="compass">
+    Auto-generated walkthroughs of the architecture, ordered by dependency. Learn the codebase in the right order.
+  </Card>
+  <Card title="Fuzzy & Semantic Search" icon="magnifying-glass">
+    Find anything by name or by meaning. Search "which parts handle auth?" and get relevant results across the graph.
+  </Card>
+  <Card title="Diff Impact Analysis" icon="code-compare">
+    See which parts of the system your changes affect before you commit. Understand ripple effects across the codebase.
+  </Card>
+  <Card title="Multi-Platform" icon="layer-group">
+    Works with Claude Code, Codex, OpenCode, Cursor, OpenClaw, and Antigravity.
+  </Card>
+</CardGroup>
+
+## Multi-platform support
+
+| Platform | Status | Install method |
+|---|---|---|
+| Claude Code | Native | Plugin marketplace |
+| Codex | Supported | AI-driven install |
+| OpenCode | Supported | Plugin config |
+| OpenClaw | Supported | AI-driven install |
+| Cursor | Supported | Auto-discovery |
+| Antigravity | Supported | AI-driven install |
+
+<Note>
+  Understand Anything is MIT-licensed and open source. Contributions welcome — see the [Contributing guide](/contributing/development-setup).
+</Note>

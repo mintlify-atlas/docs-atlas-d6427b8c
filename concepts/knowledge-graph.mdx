@@ -1,0 +1,323 @@
+---
+title: Knowledge Graph
+description: The central data structure that Understand Anything builds to represent your codebase — its nodes, edges, layers, and guided tour.
+---
+
+The **knowledge graph** is the heart of Understand Anything. When you run `/understand`, a multi-agent pipeline analyzes your project and produces a single JSON file at `.understand-anything/knowledge-graph.json` that encodes every file, function, class, and the relationships between them.
+
+The graph is not just a static snapshot — it is a structured, schema-validated representation that powers the interactive dashboard, semantic search, guided tours, and diff analysis.
+
+## Root Structure
+
+At the top level the graph has six fields:
+
+```typescript
+export interface KnowledgeGraph {
+  version: string;
+  project: ProjectMeta;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  layers: Layer[];
+  tour: TourStep[];
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | `string` | Schema version (currently `"1.0.0"`) |
+| `project` | `ProjectMeta` | Name, languages, frameworks, timestamp, git hash |
+| `nodes` | `GraphNode[]` | Every file, function, class, module, and concept |
+| `edges` | `GraphEdge[]` | Typed, weighted relationships between nodes |
+| `layers` | `Layer[]` | Architectural groupings (API, Service, Data, …) |
+| `tour` | `TourStep[]` | Ordered steps for the guided learning walkthrough |
+
+### Project metadata
+
+```typescript
+export interface ProjectMeta {
+  name: string;
+  languages: string[];
+  frameworks: string[];
+  description: string;
+  analyzedAt: string;
+  gitCommitHash: string;
+}
+```
+
+The `gitCommitHash` is used by incremental analysis to determine which files have changed since the last run. See [Incremental Analysis](/concepts/incremental-analysis).
+
+---
+
+## Nodes
+
+A node represents one meaningful unit in the codebase.
+
+```typescript
+export interface GraphNode {
+  id: string;
+  type: "file" | "function" | "class" | "module" | "concept";
+  name: string;
+  filePath?: string;
+  lineRange?: [number, number];
+  summary: string;
+  tags: string[];
+  complexity: "simple" | "moderate" | "complex";
+  languageNotes?: string;
+}
+```
+
+### Node types
+
+<CardGroup cols={2}>
+  <Card title="file" icon="file">
+    A source file. Every analyzed file in the project gets a `file` node. ID convention: `file:<relative-path>`.
+  </Card>
+  <Card title="function" icon="code">
+    A function or method extracted from a file. ID convention: `func:<relative-path>:<name>`.
+  </Card>
+  <Card title="class" icon="cube">
+    A class, interface, or named type. ID convention: `class:<relative-path>:<name>`.
+  </Card>
+  <Card title="module" icon="package">
+    A logical module or package — a higher-level grouping that may span files. ID convention: `module:<name>`.
+  </Card>
+  <Card title="concept" icon="lightbulb">
+    An abstract architectural concept or design pattern (e.g., "Event Sourcing"). ID convention: `concept:<name>`.
+  </Card>
+</CardGroup>
+
+### Complexity
+
+Every node carries a `complexity` rating assigned by the file-analyzer agent:
+
+| Value | Meaning |
+|-------|---------|
+| `"simple"` | Straightforward logic, easy to understand at a glance |
+| `"moderate"` | Some non-trivial logic or coupling |
+| `"complex"` | Dense logic, many dependencies, or intricate patterns |
+
+The dashboard uses complexity to tint node colors so you can spot hot spots instantly.
+
+### Language notes
+
+The optional `languageNotes` field carries a brief explanation of language-specific patterns found in the node — for example, noting that a TypeScript file uses generics, or that a Python file relies on decorators. These surface in the dashboard's Learn panel.
+
+---
+
+## Edges
+
+An edge encodes a typed, directional relationship between two nodes.
+
+```typescript
+export type EdgeType =
+  | "imports" | "exports" | "contains" | "inherits" | "implements"  // Structural
+  | "calls" | "subscribes" | "publishes" | "middleware"              // Behavioral
+  | "reads_from" | "writes_to" | "transforms" | "validates"         // Data flow
+  | "depends_on" | "tested_by" | "configures"                       // Dependencies
+  | "related" | "similar_to";                                        // Semantic
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: EdgeType;
+  direction: "forward" | "backward" | "bidirectional";
+  description?: string;
+  weight: number; // 0-1
+}
+```
+
+### Edge categories
+
+There are 18 edge types organized into 5 semantic categories:
+
+**Structural** — how code is organized and composed
+
+| Type | Meaning |
+|------|---------|
+| `imports` | File or module imports another |
+| `exports` | File or module exports a symbol |
+| `contains` | A file contains a function or class |
+| `inherits` | A class inherits from another |
+| `implements` | A class implements an interface |
+
+**Behavioral** — how code communicates at runtime
+
+| Type | Meaning |
+|------|---------|
+| `calls` | A function calls another function |
+| `subscribes` | A node subscribes to an event or observable |
+| `publishes` | A node publishes or emits events |
+| `middleware` | A node is middleware in a request pipeline |
+
+**Data flow** — how data moves and is transformed
+
+| Type | Meaning |
+|------|---------|
+| `reads_from` | A node reads data from another |
+| `writes_to` | A node writes data to another |
+| `transforms` | A node transforms data produced by another |
+| `validates` | A node validates data produced by another |
+
+**Dependencies** — build-time and test relationships
+
+| Type | Meaning |
+|------|---------|
+| `depends_on` | A general build or runtime dependency |
+| `tested_by` | A module is tested by a test file |
+| `configures` | A node provides configuration for another |
+
+**Semantic** — conceptual similarity
+
+| Type | Meaning |
+|------|---------|
+| `related` | Two nodes are conceptually related |
+| `similar_to` | Two nodes serve similar purposes |
+
+### Edge weight conventions
+
+The `weight` field (0–1) indicates relationship strength and is used by the layout algorithm to place closely related nodes near each other:
+
+| Edge type | Default weight |
+|-----------|----------------|
+| `contains` | `1.0` |
+| `inherits`, `implements` | `0.9` |
+| `calls`, `exports` | `0.8` |
+| `imports` | `0.7` |
+| `depends_on` | `0.6` |
+| `tested_by`, all others | `0.5` |
+
+---
+
+## Layers
+
+Layers are architectural groupings of file nodes. They are detected by the `architecture-analyzer` agent and power the color-coded legend in the dashboard.
+
+```typescript
+export interface Layer {
+  id: string;
+  name: string;
+  description: string;
+  nodeIds: string[];
+}
+```
+
+The `id` follows a `layer:<kebab-case-name>` convention (e.g., `layer:api-layer`). The `nodeIds` array contains the IDs of `file`-type nodes that belong to this layer.
+
+See [Architectural Layers](/concepts/architectural-layers) for a full explanation of how layers are detected and what common layers look like.
+
+---
+
+## Tour
+
+The tour is an ordered sequence of steps that guides a reader through the codebase from entry points to utilities. Each step focuses attention on a set of nodes.
+
+```typescript
+export interface TourStep {
+  order: number;
+  title: string;
+  description: string;
+  nodeIds: string[];
+  languageLesson?: string;
+}
+```
+
+The optional `languageLesson` field contains a brief explanation of a programming concept visible in the highlighted nodes — useful for onboarding developers who are new to the language or pattern.
+
+---
+
+## Example: what the JSON looks like
+
+Below is a minimal but complete knowledge graph for a small project:
+
+```json
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "my-api",
+    "languages": ["typescript"],
+    "frameworks": ["express"],
+    "description": "A REST API for managing tasks",
+    "analyzedAt": "2025-09-12T14:30:00.000Z",
+    "gitCommitHash": "a1b2c3d"
+  },
+  "nodes": [
+    {
+      "id": "file:src/routes/tasks.ts",
+      "type": "file",
+      "name": "tasks.ts",
+      "filePath": "src/routes/tasks.ts",
+      "summary": "Express router handling CRUD endpoints for tasks",
+      "tags": ["routes", "api", "tasks"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/routes/tasks.ts:createTask",
+      "type": "function",
+      "name": "createTask",
+      "filePath": "src/routes/tasks.ts",
+      "lineRange": [12, 34],
+      "summary": "Validates request body and inserts a new task into the database",
+      "tags": ["handler", "write"],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/routes/tasks.ts",
+      "target": "func:src/routes/tasks.ts:createTask",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:api-layer",
+      "name": "API Layer",
+      "description": "HTTP endpoints, route handlers, and API controllers",
+      "nodeIds": ["file:src/routes/tasks.ts"]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Start with the API routes",
+      "description": "The routes directory is the entry point for all HTTP traffic. Each file maps URL paths to handler functions.",
+      "nodeIds": ["file:src/routes/tasks.ts"]
+    }
+  ]
+}
+```
+
+---
+
+## File location
+
+The knowledge graph is always written to:
+
+```
+<project-root>/.understand-anything/knowledge-graph.json
+```
+
+Analysis metadata (commit hash, timestamp, file count) is stored separately at:
+
+```
+<project-root>/.understand-anything/meta.json
+```
+
+<Note>
+  Both files are project-specific — they live inside your project, not globally. You can safely commit `.understand-anything/` to version control so teammates inherit the pre-built graph, or add it to `.gitignore` if you prefer to build it locally.
+</Note>
+
+## Schema validation
+
+The graph is validated with Zod on every load. The dashboard displays an error banner if the schema check fails. You can validate a graph programmatically:
+
+```typescript
+import { validateGraph } from "@understand-anything/core";
+
+const result = validateGraph(rawJson);
+if (!result.success) {
+  console.error(result.errors);
+}
+```

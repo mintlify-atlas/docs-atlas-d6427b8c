@@ -1,0 +1,105 @@
+---
+title: Antigravity
+description: Install Understand Anything on Antigravity using an AI-driven installation flow.
+---
+
+## Overview
+
+Antigravity is a **supported platform** for Understand Anything. Installation is handled via an AI-driven flow: you instruct Antigravity to fetch and execute the installation guide directly from the repository.
+
+## Prerequisites
+
+- Antigravity installed
+- Git installed and available on your `PATH`
+
+## Installation
+
+<Steps>
+  <Step title="Trigger the AI-driven install">
+    Open Antigravity and send the following message:
+
+    ```
+    Fetch and follow instructions from https://raw.githubusercontent.com/Lum1104/Understand-Anything/refs/heads/main/.antigravity/INSTALL.md
+    ```
+
+    Antigravity fetches the install guide and executes the steps on your behalf.
+  </Step>
+
+  <Step title="What Antigravity does for you">
+    The instructions tell Antigravity to:
+
+    1. Clone the repository to `~/.antigravity/understand-anything`:
+       ```bash
+       git clone https://github.com/Lum1104/Understand-Anything.git ~/.antigravity/understand-anything
+       ```
+
+    2. Create the skills symlink so Antigravity can discover them:
+       ```bash
+       mkdir -p ~/.gemini/antigravity/skills
+       ln -s ~/.antigravity/understand-anything/understand-anything-plugin/skills ~/.gemini/antigravity/skills/understand-anything
+       ```
+
+       <Note>
+         On Windows (PowerShell), the equivalent commands use `New-Item` and `mklink /J` instead of `ln -s`.
+       </Note>
+
+    3. Restart the chat or IDE so Antigravity can discover the skills.
+  </Step>
+
+  <Step title="Restart your chat or IDE">
+    Restart Antigravity (or the IDE it is running in) so it picks up the new skills from `~/.gemini/antigravity/skills/understand-anything`.
+  </Step>
+</Steps>
+
+## Verification
+
+Confirm the symlink is in place:
+
+```bash
+ls -la ~/.gemini/antigravity/skills/understand-anything
+```
+
+You should see a symlink pointing to the plugin's `skills/` directory inside the cloned repo.
+
+## First Use
+
+Invoke Understand Anything by telling Antigravity:
+
+```
+Run the understand skill to analyze this codebase
+```
+
+Other useful invocations:
+
+```
+Use the understand-dashboard skill to view the architecture map
+```
+
+```
+Use understand-chat to answer a question about the graph
+```
+
+Skills also activate automatically when Antigravity detects relevant context.
+
+## Updating
+
+To pull the latest version:
+
+```bash
+cd ~/.antigravity/understand-anything && git pull
+```
+
+The symlink means skills update instantly — no restart needed.
+
+## Uninstalling
+
+```bash
+rm ~/.gemini/antigravity/skills/understand-anything
+rm -rf ~/.antigravity/understand-anything
+```
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

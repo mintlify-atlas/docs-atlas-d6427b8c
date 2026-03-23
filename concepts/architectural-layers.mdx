@@ -1,0 +1,129 @@
+---
+title: Architectural Layers
+description: How Understand Anything groups files into architectural layers and displays them as color-coded regions in the dashboard.
+---
+
+**Architectural layers** are logical groupings of files that reflect the role each file plays in the overall system — API endpoints, business logic, data access, UI components, and so on. Understand Anything detects these layers automatically and uses them to color-code nodes in the dashboard, power the guided tour, and help you orient yourself in an unfamiliar codebase.
+
+## The Layer type
+
+```typescript
+export interface Layer {
+  id: string;
+  name: string;
+  description: string;
+  nodeIds: string[];
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Stable identifier in `layer:<kebab-case-name>` format, e.g. `layer:api-layer` |
+| `name` | Human-readable name shown in the dashboard legend, e.g. `"API Layer"` |
+| `description` | One-sentence summary of what belongs in this layer |
+| `nodeIds` | IDs of the `file`-type nodes assigned to this layer |
+
+<Note>
+  Only `file`-type nodes are assigned to layers. Function and class nodes inherit the visual treatment of their parent file.
+</Note>
+
+---
+
+## Common layers
+
+The `architecture-analyzer` agent recognizes the following layers out of the box. The exact set produced for your project depends on what the LLM finds in your file structure.
+
+| Layer | Directory patterns | Description |
+|-------|--------------------|-------------|
+| **API Layer** | `routes`, `controller`, `handler`, `endpoint`, `api` | HTTP endpoints, route handlers, and API controllers |
+| **Service Layer** | `service`, `usecase`, `use-case`, `business` | Business logic and application services |
+| **Data Layer** | `model`, `entity`, `schema`, `database`, `db`, `migration`, `repository`, `repo` | Data models, database access, and persistence |
+| **UI Layer** | `component`, `view`, `page`, `screen`, `layout`, `widget`, `ui` | User interface components and views |
+| **Middleware Layer** | `middleware`, `interceptor`, `guard`, `filter`, `pipe` | Request/response middleware and interceptors |
+| **Utility Layer** | `util`, `helper`, `lib`, `common`, `shared` | Shared utilities, helpers, and common libraries |
+| **Test Layer** | `test`, `spec`, `__tests__`, `__specs__` | Test files and test utilities |
+| **Configuration Layer** | `config`, `setting`, `env` | Application configuration and environment settings |
+| **Core** | _(fallback)_ | Files that don't match any other pattern |
+
+---
+
+## How detection works
+
+Layer detection runs in **two passes**: a fast heuristic pass that handles most projects correctly, followed by an optional LLM pass for nuanced cases.
+
+### Heuristic detection
+
+The `detectLayers` function in `layer-detector.ts` assigns each `file` node to a layer by matching its path segments against the known directory patterns. The first match wins:
+
+```
+src/routes/tasks.ts      → API Layer      (segment "routes" matches)
+src/services/billing.ts  → Service Layer  (segment "services" matches)
+src/models/User.ts       → Data Layer     (segment "models" matches)
+src/utils/format.ts      → Utility Layer  (segment "utils" matches)
+src/index.ts             → Core           (no match, falls back)
+```
+
+Matching is case-insensitive and handles both singular and plural forms (e.g., `service` and `services` both match the Service Layer).
+
+### LLM-assisted detection
+
+For projects with non-standard directory structures, the `architecture-analyzer` agent receives the full file path list and is asked to identify 3–7 logical layers with `filePatterns` (path prefixes). The `applyLLMLayers` function then assigns nodes using prefix matching:
+
+```typescript
+export interface LLMLayerResponse {
+  name: string;
+  description: string;
+  filePatterns: string[];
+}
+```
+
+Framework-specific hints are injected into the agent's prompt to improve accuracy:
+
+- **React / Next.js** — `app/` or `pages/` → UI Layer; `api/` → API Layer; `lib/` → Service Layer
+- **Express / Fastify** — `routes/` → API Layer; `controllers/` → Service Layer; `models/` or `db/` → Data Layer
+- **Django** — `views/` → API Layer; `models/` → Data Layer; `templates/` → UI Layer
+- **Go** — `cmd/` → Entry Points; `internal/` → Service Layer; `pkg/` → Shared Library
+
+Files not matched by any pattern are placed in an "Other" layer rather than being dropped.
+
+---
+
+## Layers in the dashboard
+
+In the interactive dashboard, layers are displayed as a color-coded legend in the sidebar. Each layer gets a distinct color and all nodes belonging to that layer are rendered in that color in the graph.
+
+Selecting a layer in the legend filters the graph to show only its nodes and their direct connections — useful for focusing on one architectural concern at a time.
+
+---
+
+## Layers in the tour
+
+The `tour-builder` agent uses layer information to group tour steps. When layers are present, the heuristic tour generator (`generateHeuristicTour`) groups nodes by their layer in topological order:
+
+1. Entry-point layers first (those with no incoming edges from other layers)
+2. Intermediate layers in dependency order
+3. Utility and test layers last
+
+This means the tour reflects your actual architecture rather than an arbitrary alphabetical file walk.
+
+---
+
+## Layer IDs
+
+Layer IDs are stable across runs. The format is always:
+
+```
+layer:<kebab-case-name>
+```
+
+Examples:
+
+| Name | ID |
+|------|----|
+| API Layer | `layer:api-layer` |
+| Service Layer | `layer:service-layer` |
+| Data Layer | `layer:data-layer` |
+| UI Layer | `layer:ui-layer` |
+| Core | `layer:core` |
+
+For incremental updates, the architecture-analyzer is given the previous layer definitions and instructed to maintain the same names and IDs where possible, so dashboard filter state is preserved between runs.

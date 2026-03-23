@@ -1,0 +1,140 @@
+---
+title: diff-analyzer
+description: Map changed file paths to knowledge graph nodes and compute ripple-effect impact.
+---
+
+The `diff-analyzer` module takes a list of changed file paths (e.g. from a `git diff`) and maps them to the knowledge graph to identify directly changed components, downstream affected components, impacted layers, and cross-cutting relationships. It also generates a risk assessment.
+
+## DiffContext
+
+The data structure returned by `buildDiffContext`.
+
+```typescript
+export interface DiffContext {
+  projectName: string;
+  changedFiles: string[];
+  changedNodes: GraphNode[];
+  affectedNodes: GraphNode[];
+  impactedEdges: GraphEdge[];
+  affectedLayers: Layer[];
+  unmappedFiles: string[];
+}
+```
+
+<ResponseField name="projectName" type="string" required>
+  Name of the analyzed project, taken from `graph.project.name`.
+</ResponseField>
+
+<ResponseField name="changedFiles" type="string[]" required>
+  The original list of changed file paths passed to `buildDiffContext`.
+</ResponseField>
+
+<ResponseField name="changedNodes" type="GraphNode[]" required>
+  Nodes whose `filePath` matches one of the changed files, plus any nodes contained within those nodes via `"contains"` edges.
+</ResponseField>
+
+<ResponseField name="affectedNodes" type="GraphNode[]" required>
+  1-hop neighbors of `changedNodes` that are not themselves changed — the downstream blast radius.
+</ResponseField>
+
+<ResponseField name="impactedEdges" type="GraphEdge[]" required>
+  All edges where at least one endpoint is a changed node.
+</ResponseField>
+
+<ResponseField name="affectedLayers" type="Layer[]" required>
+  Layers that contain at least one changed or affected node.
+</ResponseField>
+
+<ResponseField name="unmappedFiles" type="string[]" required>
+  Changed files that could not be matched to any node in the knowledge graph (e.g. new files or deleted files not yet re-analyzed).
+</ResponseField>
+
+---
+
+## buildDiffContext
+
+Maps a list of changed file paths to knowledge graph nodes and identifies the ripple effect (affected nodes, layers, edges).
+
+```typescript
+export function buildDiffContext(
+  graph: KnowledgeGraph,
+  changedFiles: string[],
+): DiffContext
+```
+
+<ParamField path="graph" type="KnowledgeGraph" required>
+  The full knowledge graph produced by the analysis pipeline.
+</ParamField>
+
+<ParamField path="changedFiles" type="string[]" required>
+  File paths that have changed, as returned by `git diff --name-only` or similar. Paths should match the `filePath` values stored on graph nodes.
+</ParamField>
+
+### How it works
+
+1. **File mapping** — Each path in `changedFiles` is matched against `node.filePath` on every node. Unmatched paths go into `unmappedFiles`.
+2. **Children expansion** — For any matched node, edges of type `"contains"` are followed to include contained child nodes in the changed set.
+3. **1-hop neighbor detection** — All edges touching a changed node are collected as `impactedEdges`. The non-changed endpoint of each edge becomes an `affectedNode`.
+4. **Layer collection** — Any layer with a node ID in the union of changed and affected sets is included in `affectedLayers`.
+
+```typescript
+import { buildDiffContext } from "./diff-analyzer";
+
+const changedFiles = [
+  "src/auth/session.ts",
+  "src/middleware/rate-limit.ts",
+];
+
+const ctx = buildDiffContext(graph, changedFiles);
+
+console.log(ctx.changedNodes.map(n => n.name));
+console.log(`Blast radius: ${ctx.affectedNodes.length} components`);
+console.log(`Unmapped: ${ctx.unmappedFiles}`);
+```
+
+---
+
+## formatDiffAnalysis
+
+Formats a `DiffContext` as structured markdown for LLM or human consumption.
+
+```typescript
+export function formatDiffAnalysis(ctx: DiffContext): string
+```
+
+<ParamField path="ctx" type="DiffContext" required>
+  A `DiffContext` produced by `buildDiffContext`.
+</ParamField>
+
+### Output structure
+
+The returned string contains the following sections:
+
+| Section | Content |
+|---|---|
+| `## Changed Components` | Name, type, summary, file path, and complexity for each changed node |
+| `## Affected Components` | Downstream neighbors that may need attention |
+| `## Affected Layers` | Layers touched by the change |
+| `## Impacted Relationships` | `source --[type]--> target` for every impacted edge |
+| `## Unmapped Files` | Changed files not found in the knowledge graph |
+| `## Risk Assessment` | Automatically computed risk signals |
+
+### Risk assessment logic
+
+The risk section is computed automatically from the context:
+
+- **High complexity** — emitted when any changed node has `complexity === "complex"`
+- **Cross-layer impact** — emitted when affected layers span more than one layer
+- **Wide blast radius** — emitted when more than 5 nodes are affected downstream
+- **New/unmapped files** — emitted when `unmappedFiles` is non-empty
+- **Low risk** — emitted only when none of the above conditions are met
+
+```typescript
+import { buildDiffContext, formatDiffAnalysis } from "./diff-analyzer";
+
+const ctx = buildDiffContext(graph, changedFiles);
+const report = formatDiffAnalysis(ctx);
+
+// Use report as context for an LLM code-review prompt
+console.log(report);
+```

@@ -1,0 +1,87 @@
+---
+title: Cursor
+description: Install Understand Anything on Cursor via automatic plugin discovery.
+---
+
+## Overview
+
+Cursor is a **supported platform** for Understand Anything. The repository ships a `.cursor-plugin/plugin.json` manifest that Cursor reads automatically when you open the cloned repo. There is no manual installation step — just clone and open.
+
+## Prerequisites
+
+- [Cursor](https://cursor.sh) installed
+- Git installed and available on your `PATH`
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/Lum1104/Understand-Anything.git
+    ```
+  </Step>
+
+  <Step title="Open the cloned directory in Cursor">
+    ```bash
+    cursor Understand-Anything
+    ```
+
+    Cursor reads `.cursor-plugin/plugin.json` at startup and automatically registers the plugin's skills and agents.
+  </Step>
+</Steps>
+
+<Note>
+  No manual configuration is required. Cursor discovers the plugin through the `.cursor-plugin/plugin.json` manifest included in the repository root.
+</Note>
+
+## How Auto-Discovery Works
+
+The `.cursor-plugin/plugin.json` manifest declares:
+
+```json
+{
+  "name": "understand-anything",
+  "displayName": "Understand Anything",
+  "skills": "./understand-anything-plugin/skills/",
+  "agents": "./understand-anything-plugin/agents/"
+}
+```
+
+Cursor reads this file and loads the skills and agents from the paths listed, making all `understand-*` commands immediately available.
+
+## Verification
+
+After opening the directory in Cursor, verify the plugin is active by checking for available skills in the Cursor command palette or AI panel. The following skills should be accessible:
+
+- `understand` — Build the knowledge graph
+- `understand-dashboard` — Open the interactive dashboard
+- `understand-chat` — Ask questions about the codebase
+- `understand-diff` — Analyze impact of current changes
+- `understand-explain` — Deep-dive into a specific file or function
+- `understand-onboard` — Generate an onboarding guide
+
+## First Use
+
+With the repository open in Cursor, run `/understand` in the AI panel to start the analysis:
+
+```
+/understand
+```
+
+The multi-agent pipeline scans your project, builds a knowledge graph at `.understand-anything/knowledge-graph.json`, and opens the interactive dashboard when complete.
+
+## Updating
+
+Pull the latest changes from the repository:
+
+```bash
+cd Understand-Anything && git pull
+```
+
+Reopen the directory in Cursor to pick up any plugin manifest changes.
+
+## Next Steps
+
+<Card title="Quickstart" href="/quickstart">
+  Learn all available commands and how to get the most out of Understand Anything.
+</Card>

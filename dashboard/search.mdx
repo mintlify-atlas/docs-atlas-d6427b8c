@@ -1,0 +1,85 @@
+---
+title: "Search"
+description: "The search bar provides fuzzy full-text search across all nodes in your knowledge graph, with results highlighted directly in the graph."
+---
+
+The search bar sits between the header and the main graph area. It is always visible and searches the full knowledge graph as you type.
+
+## How search works
+
+Search uses [Fuse.js](https://fusejs.io) for client-side fuzzy matching. All matching runs in the browser — no server round-trip required.
+
+Four fields on each node are indexed with the following weights:
+
+| Field | Weight | Description |
+|-------|--------|-------------|
+| `name` | 0.4 | The node's name (function name, file name, class name, etc.) |
+| `tags` | 0.3 | Tags assigned by the analysis pipeline |
+| `summary` | 0.2 | The LLM-generated plain-English summary |
+| `languageNotes` | 0.1 | Notes about programming patterns used in the node |
+
+The `name` field has the highest weight, so searching for a specific function or file name will surface exact matches at the top. Searching for a concept like `"authentication"` or `"retry logic"` will match nodes where those ideas appear in the summary or tags.
+
+## Using the search bar
+
+<Steps>
+  <Step title="Type your query">
+    Click the search input and start typing. Results appear in a dropdown as you type. The graph updates simultaneously, highlighting matching nodes with a gold ring.
+  </Step>
+  <Step title="Select a result">
+    Click any result in the dropdown to select that node. The sidebar switches to **NodeInfo**, and the graph pans and zooms to center on the selected node.
+  </Step>
+  <Step title="Clear the search">
+    Delete the query text to clear results. All node highlights are removed and the graph returns to its normal appearance.
+  </Step>
+</Steps>
+
+Press **Escape** to close the dropdown without selecting a result. Clicking outside the search area also closes the dropdown.
+
+## Search results dropdown
+
+The dropdown shows the top 5 results. Each result row displays:
+
+- **Type badge** — color-coded by node type (file, function, class, module, concept)
+- **Node name**
+- **Relevance bar** — a visual progress bar showing match strength (0–100%)
+- **Relevance percentage**
+
+Relevance is calculated as `(1 - Fuse score) × 100`. A score of 100% means an exact match.
+
+## Graph highlighting
+
+All matching nodes (not just the top 5) are highlighted in the graph canvas simultaneously:
+
+| Match strength | Visual style |
+|----------------|--------------|
+| Score ≤ 0.1 (very strong) | Bright gold ring (`ring-2 ring-gold-bright`) |
+| Score ≤ 0.3 (strong) | Gold ring (`ring-2 ring-gold`) |
+| Score > 0.3 (weak) | Faint gold ring (`ring-1 ring-gold-dim/60`) |
+
+This lets you see the full distribution of relevant nodes across the graph at a glance, even when the dropdown only shows five entries.
+
+## Space-separated tokens (OR search)
+
+Fuse.js treats space-separated tokens as independent terms combined with OR logic. Searching for `auth login` will match nodes that contain either `auth` OR `login` (or both). This is useful when you want to find all nodes related to a broad concern:
+
+```
+auth token session
+```
+
+Returns nodes matching any of those three terms.
+
+## Search modes
+
+The search bar has two mode buttons: **Fuzzy** and **Semantic**.
+
+| Mode | Behavior |
+|------|----------|
+| Fuzzy | Fuse.js fuzzy matching (active now) |
+| Semantic | Reserved for future embedding-based search |
+
+<Note>
+  Semantic mode is currently a placeholder. Both modes use the same Fuse.js engine. Semantic search via vector embeddings is planned for a future release.
+</Note>
+
+The active mode is shown next to the result count in the search bar.

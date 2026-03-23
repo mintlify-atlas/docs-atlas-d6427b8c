@@ -1,0 +1,165 @@
+---
+title: Incremental Analysis
+description: How Understand Anything re-analyzes only changed files, keeping analysis fast for large codebases.
+---
+
+Running `/understand` on a large codebase from scratch can take several minutes. **Incremental analysis** eliminates most of that wait by re-analyzing only the files that changed since the last run, then merging the fresh results into the existing knowledge graph.
+
+## How it works
+
+<Steps>
+  <Step title="Read the last commit hash">
+    When the pipeline starts, it reads the `gitCommitHash` stored in `.understand-anything/meta.json`.
+
+    ```json
+    {
+      "lastAnalyzedAt": "2025-09-12T14:30:00.000Z",
+      "gitCommitHash": "a1b2c3d",
+      "version": "1.0.0",
+      "analyzedFiles": 47
+    }
+    ```
+  </Step>
+
+  <Step title="Detect changed files">
+    The `isStale` function compares the stored hash against `HEAD` using `git diff`:
+
+    ```typescript
+    export function getChangedFiles(
+      projectDir: string,
+      lastCommitHash: string,
+    ): string[] {
+      try {
+        const output = execFileSync('git', ['diff', `${lastCommitHash}..HEAD`, '--name-only'], {
+          cwd: projectDir,
+          encoding: "utf-8",
+        });
+        return output
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+      } catch {
+        return [];
+      }
+    }
+
+    export function isStale(
+      projectDir: string,
+      lastCommitHash: string,
+    ): StalenessResult {
+      const changedFiles = getChangedFiles(projectDir, lastCommitHash);
+      return {
+        stale: changedFiles.length > 0,
+        changedFiles,
+      };
+    }
+    ```
+
+    If `git diff` returns no files, the pipeline reports "Graph is up to date" and exits immediately — no agents are launched.
+  </Step>
+
+  <Step title="Re-analyze only changed files">
+    The changed file list is batched and dispatched to `file-analyzer` agents, just like a full analysis — but the batch contains only the modified files. Up to 3 agents run concurrently.
+  </Step>
+
+  <Step title="Merge into the existing graph">
+    The `mergeGraphUpdate` function surgically updates the existing graph:
+
+    ```typescript
+    export function mergeGraphUpdate(
+      existingGraph: KnowledgeGraph,
+      changedFilePaths: string[],
+      newNodes: GraphNode[],
+      newEdges: GraphEdge[],
+      newCommitHash: string,
+    ): KnowledgeGraph
+    ```
+
+    In order:
+    1. Identify all nodes whose `filePath` matches any changed file — these are stale and will be replaced.
+    2. Remove stale nodes from the graph.
+    3. Remove any edge whose `source` or `target` belongs to a removed node.
+    4. Append the fresh nodes and edges from the new analysis.
+    5. Update `project.gitCommitHash` and `project.analyzedAt` to reflect the current state.
+  </Step>
+
+  <Step title="Re-run architecture analysis">
+    Even for incremental updates, the `architecture-analyzer` always re-runs on the full merged node set. Layer assignments can shift when files change (for example, a new `services/` directory could attract nodes away from `Core`). The agent is given the previous layer definitions and instructed to maintain the same names and IDs where possible.
+  </Step>
+
+  <Step title="Save and clean up">
+    The updated graph is written back to `.understand-anything/knowledge-graph.json` and the metadata in `meta.json` is updated with the new commit hash and timestamp. Intermediate files are deleted.
+  </Step>
+</Steps>
+
+---
+
+## The AnalysisMeta type
+
+Metadata about the last analysis run is stored in `meta.json` and represented by the `AnalysisMeta` interface:
+
+```typescript
+export interface AnalysisMeta {
+  lastAnalyzedAt: string;
+  gitCommitHash: string;
+  version: string;
+  analyzedFiles: number;
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `lastAnalyzedAt` | ISO 8601 timestamp of the last successful analysis |
+| `gitCommitHash` | The git commit at which the graph was last fully built or incrementally updated |
+| `version` | Schema version — used to detect when a format migration is needed |
+| `analyzedFiles` | Number of files that were analyzed in the last run |
+
+---
+
+## Decision table
+
+The pipeline's Phase 0 pre-flight applies this logic every time `/understand` is run:
+
+| Condition | Result |
+|-----------|--------|
+| `--full` flag passed | Full analysis, ignores existing graph |
+| No `meta.json` or no `knowledge-graph.json` | Full analysis |
+| Commit hash unchanged | "Graph is up to date" — stops immediately |
+| Commit hash changed, files differ | Incremental update (changed files only) |
+| `git diff` returns no files despite hash change | "Graph is up to date" — stops immediately |
+
+---
+
+## When to force a full re-analysis
+
+Incremental analysis covers the common case — committed code changes. Use `--full` to force a complete rebuild when:
+
+- **You've made uncommitted changes** that you want reflected in the graph. Git diff only tracks committed changes, so working-tree modifications are invisible to the staleness check.
+- **The schema version has changed.** If you update the plugin and the graph format has evolved, the existing graph may not be compatible with the new dashboard.
+- **The graph seems wrong or incomplete.** If incremental merges have accumulated errors, a fresh build is the cleanest fix.
+- **You've significantly restructured the project.** Moving many files can leave orphaned nodes and stale layer assignments that are better resolved by a clean run.
+
+```bash
+/understand --full
+```
+
+<Warning>
+  `--full` replaces the existing graph entirely. If you have custom annotations or manually edited layer assignments in your `knowledge-graph.json`, they will be overwritten.
+</Warning>
+
+---
+
+## Performance impact
+
+For a typical project the time savings are significant:
+
+| Scenario | Analysis scope | Approximate time |
+|----------|---------------|------------------|
+| First run, 50-file project | 50 files | ~2–3 minutes |
+| Incremental, 3 files changed | 3 files | ~15–30 seconds |
+| First run, 200-file project | 200 files | ~8–12 minutes |
+| Incremental, 10 files changed | 10 files | ~45–90 seconds |
+
+<Tip>
+  Commit your changes before running `/understand` — incremental analysis only detects committed changes. Alternatively, use `--full` if you need to analyze uncommitted work.
+</Tip>
