@@ -1,0 +1,135 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Understand Anything",
+  "projectDescription": "A multi-platform AI coding plugin that analyzes any codebase with a multi-agent pipeline, builds an interactive knowledge graph, and lets you explore, search, and ask questions about it visually.",
+  "theme": "palm",
+  "primaryColor": "#d4a574",
+  "lightColor": "#f5e6d3",
+  "darkColor": "#0a0a0a",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/understand",
+              "commands/understand-dashboard",
+              "commands/understand-chat",
+              "commands/understand-diff",
+              "commands/understand-explain",
+              "commands/understand-onboard"
+            ]
+          },
+          {
+            "group": "Platform Guides",
+            "pages": [
+              "platforms/claude-code",
+              "platforms/codex",
+              "platforms/opencode",
+              "platforms/cursor",
+              "platforms/openclaw",
+              "platforms/antigravity"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/knowledge-graph",
+              "concepts/multi-agent-pipeline",
+              "concepts/architectural-layers",
+              "concepts/incremental-analysis"
+            ]
+          },
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/overview",
+              "dashboard/graph-view",
+              "dashboard/search",
+              "dashboard/personas",
+              "dashboard/guided-tours"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/development-setup",
+              "contributing/plugin-system",
+              "contributing/adding-language-support"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Package",
+            "pages": [
+              "api/core/knowledge-graph",
+              "api/core/search-engine",
+              "api/core/graph-builder",
+              "api/core/schema-validation"
+            ]
+          },
+          {
+            "group": "Skill Package",
+            "pages": [
+              "api/skill/context-builder",
+              "api/skill/diff-analyzer",
+              "api/skill/explain-builder",
+              "api/skill/onboard-builder"
+            ]
+          },
+          {
+            "group": "Plugin System",
+            "pages": [
+              "api/plugins/analyzer-plugin",
+              "api/plugins/plugin-registry",
+              "api/plugins/tree-sitter-plugin"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-agent pipeline (project-scanner, file-analyzer, architecture-analyzer, tour-builder, graph-reviewer) analyzes entire codebases",
+    "Interactive knowledge graph visualization with React Flow — files, functions, classes, and their relationships",
+    "Plain-English LLM summaries for every node in the graph",
+    "Fuzzy and semantic search across the entire codebase knowledge graph",
+    "Diff impact analysis to understand ripple effects before committing",
+    "Persona-adaptive UI (junior dev, PM, power user) with guided learning tours",
+    "Architectural layer detection and color-coded visualization",
+    "Incremental updates — only re-analyzes changed files",
+    "Multi-platform support: Claude Code, Codex, OpenCode, Cursor, OpenClaw, Antigravity",
+    "Plugin system for extending language support via tree-sitter"
+  ],
+  "publicApiSurface": [
+    "/understand — Run the full multi-agent analysis pipeline",
+    "/understand-dashboard — Open the interactive web dashboard",
+    "/understand-chat <query> — Ask questions about the codebase",
+    "/understand-diff — Analyze impact of current git changes",
+    "/understand-explain <path> — Deep-dive into a specific file or function",
+    "/understand-onboard — Generate an onboarding guide for new team members",
+    "SearchEngine — Fuse.js-backed fuzzy search over graph nodes",
+    "SemanticSearchEngine — Embedding-based semantic search",
+    "GraphBuilder — Assembles the knowledge graph from analysis results",
+    "validateGraph(data) — Zod schema validation for KnowledgeGraph",
+    "buildChatContext(graph, query) — Extract relevant subgraph for LLM chat",
+    "buildDiffContext(graph, diff) — Compute diff impact on knowledge graph",
+    "AnalyzerPlugin interface — Extend with custom language analyzers",
+    "PluginRegistry — Register and retrieve language analyzer plugins",
+    "KnowledgeGraph, GraphNode, GraphEdge, Layer, TourStep types"
+  ]
+}
