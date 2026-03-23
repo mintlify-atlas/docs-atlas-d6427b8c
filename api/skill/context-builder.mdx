@@ -92,7 +92,10 @@ export function buildChatContext(
 import { buildChatContext } from "./context-builder";
 import { loadGraph } from "@understand-anything/core";
 
-const graph = await loadGraph(".understand-anything/graph.json");
+// loadGraph takes the project root directory, not a file path
+const graph = loadGraph(process.cwd());
+if (!graph) throw new Error("No knowledge graph found. Run /understand first.");
+
 const context = buildChatContext(graph, "How does authentication work?", 20);
 
 console.log(context.relevantNodes.length);  // nodes found + 1-hop neighbors

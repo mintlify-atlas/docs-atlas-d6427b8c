@@ -278,3 +278,59 @@ const graph = builder.build();
 // graph.edges.length === 3  (contains, imports, calls)
 // graph.project.languages  === ['typescript']
 ```
+
+---
+
+## Persistence utilities
+
+The core package also exports utility functions for saving and loading graphs to/from disk. These write to and read from `.understand-anything/knowledge-graph.json` in the given project root directory.
+
+```typescript
+import { saveGraph, loadGraph, saveMeta, loadMeta } from '@understand-anything/core';
+```
+
+### saveGraph()
+
+```typescript
+saveGraph(projectRoot: string, graph: KnowledgeGraph): void
+```
+
+Writes `graph` as pretty-printed JSON to `<projectRoot>/.understand-anything/knowledge-graph.json`. Creates the `.understand-anything/` directory if it does not exist.
+
+### loadGraph()
+
+```typescript
+loadGraph(
+  projectRoot: string,
+  options?: { validate?: boolean },
+): KnowledgeGraph | null
+```
+
+Reads and parses the knowledge graph from `<projectRoot>/.understand-anything/knowledge-graph.json`. Returns `null` if the file does not exist.
+
+By default (`validate` not set or `true`), the loaded data is validated against `KnowledgeGraphSchema`. Throws an `Error` with a descriptive message if validation fails. Pass `{ validate: false }` to skip validation and return the raw parsed object.
+
+```typescript
+// Load with validation (default)
+const graph = loadGraph(process.cwd());
+if (!graph) throw new Error("No knowledge graph found — run /understand first.");
+
+// Load without validation
+const raw = loadGraph(process.cwd(), { validate: false });
+```
+
+### saveMeta()
+
+```typescript
+saveMeta(projectRoot: string, meta: AnalysisMeta): void
+```
+
+Writes `meta` as JSON to `<projectRoot>/.understand-anything/meta.json`. Used by the pipeline to persist staleness-check data.
+
+### loadMeta()
+
+```typescript
+loadMeta(projectRoot: string): AnalysisMeta | null
+```
+
+Reads and parses `<projectRoot>/.understand-anything/meta.json`. Returns `null` if the file does not exist.

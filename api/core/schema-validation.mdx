@@ -24,7 +24,7 @@ export function validateGraph(data: unknown): ValidationResult
 Validates an arbitrary value against `KnowledgeGraphSchema`. Returns a `ValidationResult` with either the typed, parsed graph or a list of human-readable error strings.
 
 <ParamField path="data" type="unknown" required>
-  The raw value to validate. Typically a parsed JSON object loaded from `.understand-anything/graph.json`.
+  The raw value to validate. Typically a parsed JSON object loaded from `.understand-anything/knowledge-graph.json`.
 </ParamField>
 
 **Returns** `ValidationResult`
@@ -79,7 +79,7 @@ Expected object, received array
 import { validateGraph } from '@understand-anything/core/schema';
 import { readFile } from 'node:fs/promises';
 
-const raw = JSON.parse(await readFile('.understand-anything/graph.json', 'utf8'));
+const raw = JSON.parse(await readFile('.understand-anything/knowledge-graph.json', 'utf8'));
 const result = validateGraph(raw);
 
 if (result.success) {
@@ -104,7 +104,8 @@ if (!result.success) {
   showErrorBanner(result.errors!.join('\n'));
   return;
 }
-loadGraph(result.data);
+// result.data is now fully typed as KnowledgeGraph
+setGraph(result.data);
 ```
 
 ---
